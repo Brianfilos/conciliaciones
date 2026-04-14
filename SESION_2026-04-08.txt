@@ -1,0 +1,50 @@
+SESION 2026-04-08 - RESUMEN DE CAMBIOS
+=======================================
+
+1. VENV ROTO (Python 3.12 → 3.13)
+   - Se actualizó pyvenv.cfg para apuntar a Python313
+   - Si sigue fallando: cmd /c "rd /s /q venv" y recrear
+
+2. EXPORTADOR TXT ENVIGADO (etl/views.py)
+   - Agregado bloque especial para ENVIGADO + fmt=txt
+   - AUTO: consecutivo|nit|nombre|año|periodo|estado|fecha_pres|fecha_pago
+           consecutivo|nit|nombre|codigo|descripcion|valor
+   - RETE: consecutivo|nit|nombre|año|periodo|total|estado|fecha_pres|fecha_pago
+           consecutivo|nit|nombre|descripcion|valor
+   - Mapa DESC_ENVIGADO: 8575/8576/8577/8578/8579/7377/7378/7379
+
+3. FIX NaT EN motor.py (_guardar → sd())
+   - Agregado: if v is None or v is pd.NaT: return None
+   - Usa pd.to_datetime(v, errors="coerce") + to_pydatetime().date()
+
+4. FIX JSON NaN en envigado.py (RETE make_extra)
+   - El campo "total" usaba float(NaN) que no es JSON válido
+   - Cambiado a lambda que convierte NaN → 0
+
+5. CIIU DE ENVIGADO
+   - Cargado archivo: Codigos CIIU y Tarifas Envigado.xlsx (443 registros)
+   - Tabla CIIUMunicipio con INDUSTRIAL/COMERCIAL/SERVICIOS
+
+6. FIX PARSER CIIU en envigado.py (_auto)
+   - El archivo actividades tiene formato "8299-Descripcion" (sin espacios en el guion)
+   - Cambiado de split(' - ') a re.match(r'^(\d+)') para extraer solo los dígitos
+
+7. FIX DETECCIÓN ciiu_col en envigado.py
+   - Antes tomaba 'Código del establecimiento' en vez de 'Código CIIU'
+   - Ahora busca primero columna con "CIIU", luego "Código" sin "establecimiento"
+
+8. FIX FORMATO FECHAS Y ESTADO en envigado.py
+   - Añadidos métodos estáticos _fmt_fecha() y _fmt_estado()
+   - Fechas se guardan en datos_extra como DD-MM-YYYY (no timestamp)
+   - Estado limpio sin el prefijo "✓ "
+
+ARCHIVOS MODIFICADOS:
+- etl/views.py
+- etl/services/motor.py
+- etl/services/envigado.py
+
+PENDIENTE (al finalizar sesión):
+- Recargar AUTO y RETE de Envigado desde la UI después de los fixes
+- Verificar TXT con conceptos 8575/8576/8577 correctos
+- Los 46 registros sin concepto son CIIUs sin tipo en la tabla (no crítico)
+- Caldas: revisar tabs labels (tab_enc_label / tab_det_label en views.py)

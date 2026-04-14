@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Iniciar Sesión - Sistema de Conciliaciones</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  {% load static %}
+  <link rel="stylesheet" href="{% static 'css/main.css' %}">
+  <style>
+    body { background: #f0f4f8; min-height: 100vh; display:flex; align-items:center; justify-content:center; }
+    .login-card { max-width:420px; width:100%; }
+    .login-logo-bar { background:#1B3A6B; padding:1.8rem 1.5rem; border-radius:.5rem .5rem 0 0; text-align:center; }
+    .login-logo-bar img { max-height:90px; max-width:260px; object-fit:contain; display:block; margin:0 auto; }
+    .login-body { background:#fff; padding:2rem; border-radius:0 0 .5rem .5rem; box-shadow:0 4px 20px rgba(0,0,0,.15); }
+    .btn-login { background:#1B3A6B; color:#fff; width:100%; padding:.75rem; font-size:1rem; border:none; border-radius:.4rem; }
+    .btn-login:hover { background:#2d5fa0; color:#fff; }
+  </style>
+</head>
+<body>
+<div class="login-card">
+  <div class="login-logo-bar">
+    {% if gobs_logos %}
+      <img src="/gobs-media/{{ gobs_logos.1 }}" alt="Logo institucional">
+    {% else %}
+      <h4 class="text-white mb-0">GOBS</h4>
+    {% endif %}
+  </div>
+  <div class="login-body">
+    <h5 class="mb-1 text-center fw-bold" style="color:#1B3A6B;letter-spacing:.04em;">SISTEMA DE CXC</h5>
+    <p class="text-muted text-center small mb-3">Ingrese sus credenciales asignadas</p>
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% for field in form %}
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">{{ field.label }}</label>
+          {{ field }}
+          {% if field.errors %}
+            <div class="text-danger small mt-1">{{ field.errors.0 }}</div>
+          {% endif %}
+        </div>
+      {% endfor %}
+      {% if form.non_field_errors %}
+        <div class="alert alert-danger py-2 small">{{ form.non_field_errors.0 }}</div>
+      {% endif %}
+      <button type="submit" class="btn-login mt-2">Iniciar Sesión</button>
+    </form>
+    <div class="text-center mt-3">
+      <a href="{% url 'password_reset' %}" class="text-muted small">¿Olvidó su contraseña?</a>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

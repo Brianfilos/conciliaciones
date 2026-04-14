@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Cargar Conceptos — {{ municipio.nombre }}{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card shadow-sm">
+      <div class="card-header" style="background:var(--color-primario);color:#fff;">
+        <h5 class="mb-0">Cargar Conceptos — {{ municipio.nombre }}</h5>
+      </div>
+      <div class="card-body">
+        <p class="text-muted small">Registros actuales: <strong>{{ count }}</strong></p>
+        <form method="post" enctype="multipart/form-data">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Archivo CONCEPTOS.xlsx</label>
+            <input type="file" name="archivo" accept=".xlsx,.xls" class="form-control" required>
+          </div>
+          <button type="submit" class="btn btn-primary">Importar</button>
+          <a href="{% url 'admin_municipio' %}" class="btn btn-outline-secondary ms-2">Volver</a>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

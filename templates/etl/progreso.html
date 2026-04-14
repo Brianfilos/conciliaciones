@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}Procesando — {{ ejecucion.proceso.nombre }}{% endblock %}
+{% block breadcrumb %} &rsaquo; <a href="{% url 'ejecutar_proceso' ejecucion.proceso.id %}">{{ ejecucion.proceso.nombre }}</a> &rsaquo; <span>Procesando</span>{% endblock %}
+
+{% block content %}
+<style>
+  .progreso-wrap {
+    max-width: 560px;
+    margin: 4rem auto;
+    text-align: center;
+    animation: fadeUp .5s cubic-bezier(.22,1,.36,1) both;
+  }
+
+  /* ── spinner de tres puntos ── */
+  .dots-spinner {
+    display: flex;
+    justify-content: center;
+    gap: .6rem;
+    margin: 2rem 0 1.5rem;
+  }
+  .dots-spinner span {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--color-primario);
+    animation: bounce 1.2s infinite ease-in-out;
+  }
+  .dots-spinner span:nth-child(1) { animation-delay: 0s; }
+  .dots-spinner span:nth-child(2) { animation-delay: .2s; }
+  .dots-spinner span:nth-child(3) { animation-delay: .4s; }
+
+  /* ── barra de progreso indeterminada ── */
+  .barra-wrap {
+    height: 6px;
+    background: #e9ecef;
+    border-radius: 3px;
+    overflow: hidden;
+    margin: 1.5rem 0;
+  }
+  .barra-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--color-primario), var(--color-secundario));
+    border-radius: 3px;
+    animation: barraSlide 1.8s infinite ease-in-out;
+  }
+
+  /* ── resultado ── */
+  .resultado-card {
+    border: none;
+    border-radius: 1rem;
+    box-shadow: 0 4px 24px rgba(0,0,0,.1);
+    padding: 2rem;
+    animation: fadeUp .5s both;
+  }
+  .resultado-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+  }
+  .stat-pill {
+    display: inline-flex; align-items: center; gap: .4rem;
+    background: #f0f4f8;
+    border-radius: 2rem;
+    padding: .3rem 1rem;
+    font-size: .88rem;
+    font-weight: 600;
+    color: #495057;
+    margin: .3rem .2rem;
+  }
+  .stat-pill.nuevos  { background: #d4edda; color: #155724; }
+  .stat-pill.duplic  { background: #fff3cd; color: #856404; }
+  .stat-pill.error   { background: #f8d7da; color: #721c24; }
+
+  @keyframes bounce {
+    0%, 80%, 100% { transform: scale(0.6); opacity: .4; }
+    40%           { transform: scale(1.0); opacity: 1; }
+  }
+  @keyframes barraSlide {
+    0%   { width: 0%;   margin-left: 0%; }
+    50%  { width: 60%;  margin-left: 20%; }
+    100% { width: 0%;   margin-left: 100%; }
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+</style>
+
+<div class="progreso-wrap" id="progreso-container">
+
+  <!-- Estado: procesando -->
+  <div id="estado-procesando">
+    <div class="dots-spinner">
+      <span></span><span></span><span></span>
+    </div>
+    <h5 class="fw-bold" style="color:#1a1a2e;">Procesando <span style="color:var(--color-primario);">{{ ejecucion.proceso.nombre }}</span></h5>
+    <p class="text-muted mb-0">Esto puede tomar un momento según el volumen de datos.</p>
+    <p class="text-muted small">Por favor no cierre esta ventana.</p>
+    <div class="barra-wrap mt-3">
+      <div class="barra-fill"></div>
+    </div>
+  </div>
+
+  <!-- Estado: completado (oculto hasta que termine) -->
+  <div id="estado-completado" style="display:none;">
+    <div class="resultado-card">
+      <div class="resultado-icon">✅</div>
+      <h5 class="fw-bold mb-3" style="color:#1a1a2e;">¡Proceso completado!</h5>
+      <div id="stats-pills"></div>
+      <div class="mt-4 d-flex gap-2 justify-content-center flex-wrap">
+        <a id="btn-dashboard" href="#" class="btn btn-sm px-4"
+           style="background:linear-gradient(135deg,var(--color-primario),var(--color-secundario));color:#fff;border-radius:.5rem;font-weight:600;">
+          <i class="bi bi-table me-1"></i> Ver en dashboard
+        </a>
+        <a href="{% url 'municipio_home' %}" class="btn btn-sm btn-outline-secondary px-4" style="border-radius:.5rem;font-weight:600;">
+          Inicio
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Estado: error (oculto hasta que termine) -->
+  <div id="estado-error" style="display:none;">
+    <div class="resultado-card">
+      <div class="resultado-icon">❌</div>
+      <h5 class="fw-bold mb-2" style="color:#721c24;">Error en la ejecución</h5>
+      <pre id="error-log" class="text-start bg-light p-3 rounded small" style="max-height:200px;overflow:auto;font-size:.75rem;"></pre>
+      <div class="mt-3">
+        <a href="{% url 'ejecutar_proceso' ejecucion.proceso.id %}" class="btn btn-sm btn-outline-danger px-4" style="border-radius:.5rem;font-weight:600;">
+          <i class="bi bi-arrow-repeat me-1"></i> Reintentar
+        </a>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const POLL_URL = "{% url 'ejecucion_status' ejecucion.id %}";
+let attempts = 0;
+
+function poll() {
+  fetch(POLL_URL)
+    .then(r => r.json())
+    .then(data => {
+      if (data.estado === "EJECUTANDO" || data.estado === "PENDIENTE") {
+        attempts++;
+        setTimeout(poll, attempts < 10 ? 1500 : 3000);
+      } else if (data.estado === "COMPLETADO") {
+        document.getElementById("estado-procesando").style.display = "none";
+        document.getElementById("btn-dashboard").href = `/etl/dashboard/${data.proceso_id}/`;
+        document.getElementById("stats-pills").innerHTML = `
+          <span class="stat-pill nuevos"><i class="bi bi-plus-circle-fill"></i> ${data.nuevos} registro${data.nuevos !== 1 ? 's' : ''} nuevo${data.nuevos !== 1 ? 's' : ''}</span>
+          <span class="stat-pill duplic"><i class="bi bi-skip-forward-fill"></i> ${data.duplicados} duplicado${data.duplicados !== 1 ? 's' : ''} omitido${data.duplicados !== 1 ? 's' : ''}</span>
+        `;
+        document.getElementById("estado-completado").style.display = "block";
+      } else {
+        document.getElementById("estado-procesando").style.display = "none";
+        document.getElementById("error-log").textContent = data.error || "Error desconocido.";
+        document.getElementById("estado-error").style.display = "block";
+      }
+    })
+    .catch(() => { setTimeout(poll, 3000); });
+}
+
+poll();
+</script>
+{% endblock %}

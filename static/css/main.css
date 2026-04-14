@@ -1,0 +1,165 @@
+:root {
+  --color-primario: #1B3A6B;
+  --color-secundario: #2d6a9f;
+  --color-texto-header: #ffffff;
+}
+
+/* ── HEADER ─────────────────────────────────────────────────── */
+.app-header {
+  background: var(--color-primario);
+  color: var(--color-texto-header);
+  min-height: 56px;
+  border-bottom: 3px solid var(--color-secundario);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+.header-logo {
+  max-height: 42px;
+  max-width: 120px;
+  object-fit: contain;
+}
+
+.header-rol {
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  color: rgba(255,255,255,.7);
+  line-height: 1;
+}
+
+.header-breadcrumb {
+  font-size: .82rem;
+  color: rgba(255,255,255,.9);
+}
+
+.header-breadcrumb a {
+  color: rgba(255,255,255,.8);
+  text-decoration: none;
+}
+
+.header-breadcrumb a:hover { color: #fff; text-decoration: underline; }
+
+/* ── NAV TABS IN HEADER ──────────────────────────────────────── */
+.header-nav-tabs {
+  display: flex;
+  background: rgba(0,0,0,.25);
+  border-radius: 20px;
+  padding: 3px;
+}
+
+.header-nav-tab {
+  color: rgba(255,255,255,.75);
+  text-decoration: none;
+  font-size: .8rem;
+  font-weight: 600;
+  padding: .25rem .85rem;
+  border-radius: 20px;
+  transition: all .15s;
+}
+
+.header-nav-tab:hover,
+.header-nav-tab.active {
+  background: rgba(255,255,255,.2);
+  color: #fff;
+}
+
+/* ── USER AVATAR ─────────────────────────────────────────────── */
+.user-avatar {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  background: var(--color-secundario);
+  color: #fff;
+  font-weight: 700;
+  font-size: .9rem;
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid rgba(255,255,255,.4);
+}
+
+/* ── PROCESO CARDS ───────────────────────────────────────────── */
+.proceso-card {
+  border: 1px solid #e0e7ef;
+  border-radius: .5rem;
+  transition: box-shadow .2s, transform .15s;
+}
+
+.proceso-card:hover {
+  box-shadow: 0 4px 18px rgba(27,58,107,.12);
+  transform: translateY(-2px);
+}
+
+.proceso-icon {
+  font-size: 1.4rem;
+  color: var(--color-primario);
+}
+
+/* ── DASHBOARD TAB BUTTONS ───────────────────────────────────── */
+.tab-btn {
+  background: #fff;
+  border: 1px solid var(--color-primario);
+  color: var(--color-primario);
+  font-weight: 600;
+  font-size: .82rem;
+}
+
+.tab-btn.active,
+.tab-btn:hover {
+  background: var(--color-primario) !important;
+  color: #fff !important;
+  border-color: var(--color-primario) !important;
+}
+
+/* ── DASHBOARD TABLE ─────────────────────────────────────────── */
+.dashboard-table thead th {
+  background: var(--color-primario);
+  color: #fff;
+  font-size: .78rem;
+  font-weight: 600;
+  letter-spacing: .03em;
+  white-space: nowrap;
+  border: none;
+  padding: .6rem .75rem;
+}
+
+.dashboard-table tbody tr td {
+  font-size: .82rem;
+  padding: .45rem .75rem;
+  vertical-align: middle;
+}
+
+.dashboard-table tbody tr:hover td {
+  background: #f0f6ff;
+}
+
+/* ── PAGINATION ─────────────────────────────────────────────── */
+.page-link {
+  color: var(--color-primario);
+  font-size: .82rem;
+}
+
+.page-item.active .page-link {
+  background: var(--color-primario);
+  border-color: var(--color-primario);
+}
+
+/* ── FORMS ───────────────────────────────────────────────────── */
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--color-secundario);
+  box-shadow: 0 0 0 .2rem rgba(45,106,159,.2);
+}
+
+/* ── BADGES ──────────────────────────────────────────────────── */
+.badge.bg-success  { background: #198754 !important; }
+.badge.bg-warning  { background: #ffc107 !important; }
+.badge.bg-danger   { background: #dc3545 !important; }
+
+/* ── CARD HEADER ─────────────────────────────────────────────── */
+.card-header h5 { font-size: .95rem; }
+
+/* ── RESPONSIVE ─────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .app-header { flex-wrap: wrap; gap: .4rem; }
+  .header-nav-tabs { display: none; }
+}

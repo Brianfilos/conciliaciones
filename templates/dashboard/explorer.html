@@ -1,0 +1,794 @@
+{% extends "base.html" %}
+{% load etl_extras %}
+{% block title %}Dashboard — {{ proceso.nombre }}{% endblock %}
+{% block breadcrumb %}
+ &rsaquo; <a href="{% url 'proceso_list' %}">Procesos</a>
+ &rsaquo; <span>{{ proceso.nombre }}</span>
+{% endblock %}
+
+{% block content %}
+<style>
+  /* ── column filter button ── */
+  .cf-btn {
+    background: none; border: none; padding: 0 2px;
+    color: rgba(255,255,255,.7); font-size: .7rem; line-height: 1;
+    cursor: pointer; transition: color .15s;
+    vertical-align: middle;
+  }
+  .cf-btn:hover, .cf-btn.cf-active { color: #fff; }
+  .cf-btn.cf-active { color: #ffd700; }
+  .cf-btn.cf-active::after { content: "●"; font-size: .45rem; vertical-align: super; margin-left: 1px; color: #ffd700; }
+
+  /* ── dropdown panel ── */
+  .cf-panel { min-width: 180px; padding: .5rem; font-size: .82rem; }
+  .cf-panel .form-control-sm { font-size: .8rem; }
+
+  /* ── value list ── */
+  .cf-val-list { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; }
+  .cf-val-list li { padding: 0; }
+  .cf-val-btn {
+    display: block; width: 100%;
+    background: none; border: none; text-align: left;
+    padding: 5px 10px; font-size: .82rem; color: #212529;
+    cursor: pointer; border-radius: 4px;
+    transition: background .1s;
+  }
+  .cf-val-btn:hover { background: #f0f4f8; }
+  .cf-val-btn.active { background: #d4edda; color: #155724; font-weight: 600; }
+  .cf-val-btn.active::before { content: "✓ "; }
+
+  /* table header keeps its green bg when dropdown open */
+  .dashboard-table thead th { position: relative; }
+</style>
+<form method="get" id="filter-form">
+  <input type="hidden" name="tab" id="active-tab" value="{{ tab }}">
+
+  <!-- Toolbar -->
+  <div class="d-flex align-items-center flex-wrap gap-2 mb-3">
+    <!-- Tab toggle -->
+    <div class="btn-group me-2" role="group">
+      <button type="button" class="btn btn-sm tab-btn {% if tab == 'encabezado' %}active{% endif %}" data-tab="encabezado">
+        <i class="bi bi-person-lines-fill me-1"></i>{{ tab_enc_label }}
+      </button>
+      <button type="button" class="btn btn-sm tab-btn {% if tab == 'detalle' %}active{% endif %}" data-tab="detalle">
+        <i class="bi bi-list-ul me-1"></i>{{ tab_det_label }}
+      </button>
+    </div>
+
+    <!-- Search -->
+    <div class="input-group input-group-sm" style="max-width:260px;">
+      <span class="input-group-text"><i class="bi bi-search"></i></span>
+      <input type="text" name="q" class="form-control" placeholder="Buscar..." value="{{ q }}">
+    </div>
+
+    <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-funnel me-1"></i>Filtrar</button>
+    <a href="?tab={{ tab }}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+
+    <!-- Export -->
+    {% with _ef=export_filter_qs %}
+    <div class="ms-auto d-flex gap-1">
+      <a href="{% url 'exportar' proceso.id %}?tab={{ tab }}&format=excel&{{ export_filter_qs }}"
+         class="btn btn-sm btn-outline-success"><i class="bi bi-file-earmark-excel me-1"></i>Excel</a>
+      <a href="{% url 'exportar' proceso.id %}?tab={{ tab }}&format=csv&{{ export_filter_qs }}"
+         class="btn btn-sm btn-outline-secondary"><i class="bi bi-filetype-csv me-1"></i>CSV</a>
+      <a href="{% url 'exportar' proceso.id %}?tab={{ tab }}&format=txt&{{ export_filter_qs }}"
+         class="btn btn-sm btn-outline-secondary"><i class="bi bi-file-text me-1"></i>TXT</a>
+    </div>
+    {% endwith %}
+  </div>
+
+  <!-- Stats bar -->
+  <div class="d-flex align-items-center justify-content-between mb-2 small text-muted">
+    <span>
+      Mostrando <strong>{{ total_filtrado }}</strong> de <strong>{{ total_sin_filtro }}</strong> registros
+      {% if filtros_activos %}({{ filtros_activos }} filtro{{ filtros_activos|pluralize }}){% else %}(0 filtros){% endif %}
+    </span>
+    <div class="d-flex align-items-center gap-2">
+      <span>Items por página:</span>
+      <select name="per_page" class="form-select form-select-sm" style="width:80px;" onchange="this.form.submit()">
+        <option value="20" {% if per_page == 20 %}selected{% endif %}>20</option>
+        <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+        <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+      </select>
+      <span>{{ page_obj.start_index }}–{{ page_obj.end_index }} de {{ total_filtrado }}</span>
+    </div>
+  </div>
+
+<!-- TABLE -->
+<div class="card shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-sm table-hover table-striped mb-0 align-middle dashboard-table">
+      <!-- hidden inputs for value-list filters — always present so the form sends them -->
+      <input type="hidden" name="fecha_desde" id="tb-fecha_desde" value="{{ fecha_desde }}">
+      <input type="hidden" name="fecha_hasta" id="tb-fecha_hasta" value="{{ fecha_hasta }}">
+      <input type="hidden" name="tipo_doc"           id="hf-tipo_doc"           value="{{ tipo_doc_filtro }}">
+      <input type="hidden" name="estado_pago"        id="hf-estado_pago"        value="{{ estado_pago_filtro }}">
+      <input type="hidden" name="estado"             id="hf-estado"             value="{{ estado_filtro }}">
+      <input type="hidden" name="q_concepto"         id="hf-q_concepto"         value="{{ q_concepto }}">
+      <input type="hidden" name="q_centro"           id="hf-q_centro"           value="{{ q_centro }}">
+      <input type="hidden" name="caldas_tipo_persona" id="hf-caldas_tipo_persona" value="{{ caldas_tipo_persona_filtro }}">
+      <input type="hidden" name="caldas_periodo"     id="hf-caldas_periodo"     value="{{ caldas_periodo_filtro }}">
+      <input type="hidden" name="caldas_ano"         id="hf-caldas_ano"         value="{{ caldas_ano_filtro }}">
+      <input type="hidden" name="caldas_clasi"       id="hf-caldas_clasi"       value="{{ caldas_clasi_filtro }}">
+      <input type="hidden" name="env_fecha_pago_desde" id="hf-env_fecha_pago_desde" value="{{ env_fecha_pago_desde }}">
+      <input type="hidden" name="env_fecha_pago_hasta" id="hf-env_fecha_pago_hasta" value="{{ env_fecha_pago_hasta }}">
+      <input type="hidden" name="env_fecha_pres_desde" id="hf-env_fecha_pres_desde" value="{{ env_fecha_pres_desde }}">
+      <input type="hidden" name="env_fecha_pres_hasta" id="hf-env_fecha_pres_hasta" value="{{ env_fecha_pres_hasta }}">
+      <input type="hidden" name="q_valor_unit"      id="hf-q_valor_unit"       value="{{ q_valor_unit }}">
+      <input type="hidden" name="q_valor_tot"       id="hf-q_valor_tot"        value="{{ q_valor_tot }}">
+      <input type="hidden" name="q_total_pagar"     id="hf-q_total_pagar"      value="{{ q_total_pagar }}">
+      <thead>
+        <tr>
+          {% if tab == 'encabezado' %}
+
+          {# ══════════ CALDAS — DECLARACIONES ══════════ #}
+          {% if es_caldas %}
+
+          {# Macro helper: text-search dropdown #}
+          {# AUTO / RETE: columnas del formato de 32 cols SAIMYR #}
+          {% if not es_caldas_ica %}
+          <th><div class="d-flex align-items-center gap-1">radicado_externo
+            <div class="dropdown"><button class="cf-btn{% if q_consec %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
+              <div class="dropdown-menu cf-panel shadow"><input type="text" name="q_consec" class="form-control form-control-sm" value="{{ q_consec }}" placeholder="Buscar..." autofocus>
+                <div class="d-flex gap-1 mt-2"><button type="submit" class="btn btn-sm btn-primary flex-grow-1">Aplicar</button>{% if q_consec %}<button type="button" class="btn btn-sm btn-outline-secondary" onclick="cfClear('q_consec')">✕</button>{% endif %}</div>
+              </div></div></div></th>
+          <th><div class="d-flex align-items-center gap-1">año
+            <div class="dropdown"><button class="cf-btn{% if caldas_ano_filtro %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown">&#9660;</button>
+              <div class="dropdown-menu cf-panel shadow" style="min-width:140px;"><ul class="cf-val-list">
+                <li><button type="button" class="cf-val-btn{% if not caldas_ano_filtro %} active{% endif %}" onclick="cfVal('hf-caldas_ano','')">Todos</button></li>
+                {% for v in caldas_anos %}{% if v %}<li><button type="button" class="cf-val-btn{% if v == caldas_ano_filtro %} active{% endif %}" onclick="cfVal('hf-caldas_ano','{{ v }}')">{{ v }}</button></li>{% endif %}{% endfor %}
+              </ul></div></div></div></th>
+          <th><div class="d-flex align-items-center gap-1">Bimestre_declarado
+            <div class="dropdown"><button class="cf-btn{% if caldas_periodo_filtro %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown">&#9660;</button>
+              <div class="dropdown-menu cf-panel shadow" style="min-width:170px;"><ul class="cf-val-list">
+                <li><button type="button" class="cf-val-btn{% if not caldas_periodo_filtro %} active{% endif %}" onclick="cfVal('hf-caldas_periodo','')">Todos</button></li>
+                {% for v in caldas_periodos %}{% if v %}<li><button type="button" class="cf-val-btn{% if v == caldas_periodo_filtro %} active{% endif %}" onclick="cfVal('hf-caldas_periodo','{{ v }}')">{{ v }}</button></li>{% endif %}{% endfor %}
+              </ul></div></div></div></th>
+          <th>tipo_declaracion</th>
+          <th><div class="d-flex align-items-center gap-1">Tipo_persona
+            <div class="dropdown"><button class="cf-btn{% if caldas_tipo_persona_filtro %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown">&#9660;</button>
+              <div class="dropdown-menu cf-panel shadow" style="min-width:120px;"><ul class="cf-val-list">
+                <li><button type="button" class="cf-val-btn{% if not caldas_tipo_persona_filtro %} active{% endif %}" onclick="cfVal('hf-caldas_tipo_persona','')">Todos</button></li>
+                <li><button type="button" class="cf-val-btn{% if caldas_tipo_persona_filtro == 'J' %} active{% endif %}" onclick="cfVal('hf-caldas_tipo_persona','J')">J - Jurídica</button></li>
+                <li><button type="button" class="cf-val-btn{% if caldas_tipo_persona_filtro == 'N' %} active{% endif %}" onclick="cfVal('hf-caldas_tipo_persona','N')">N - Natural</button></li>
+              </ul></div></div></div></th>
+          <th><div class="d-flex align-items-center gap-1">DI_declarante
+            <div class="dropdown"><button class="cf-btn{% if q_num %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
+              <div class="dropdown-menu cf-panel shadow"><input type="text" name="q_num" class="form-control form-control-sm" value="{{ q_num }}" placeholder="Buscar NIT/Doc..." autofocus>
+                <div class="d-flex gap-1 mt-2"><button type="submit" class="btn btn-sm btn-primary flex-grow-1">Aplicar</button>{% if q_num %}<button type="button" class="btn btn-sm btn-outline-secondary" onclick="cfClear('q_num')">✕</button>{% endif %}</div>
+              </div></div></div></th>
+          <th><div class="d-flex align-items-center gap-1">Primer_apellido
+            <div class="dropdown"><button class="cf-btn{% if q_nombre %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
+              <div class="dropdown-menu cf-panel shadow" style="min-width:200px;"><input type="text" name="q_nombre" class="form-control form-control-sm" value="{{ q_nombre }}" placeholder="Buscar nombre..." autofocus>
+                <div class="d-flex gap-1 mt-2"><button type="submit" class="btn btn-sm btn-primary flex-grow-1">Aplicar</button>{% if q_nombre %}<button type="button" class="btn btn-sm btn-outline-secondary" onclick="cfClear('q_nombre')">✕</button>{% endif %}</div>
+              </div></div></div></th>
+          <th>Segundo_apellido</th>
+          <th>Nombre / Razón_social</th>
+          <th>Direccion</th><th>Telefono</th><th>Email</th>
+          <th class="text-end">Vlr_total_a_pagar</th>
+          <th>Estado</th>
+          <th><div class="d-flex align-items-center gap-1">Fecha_registro
+            <div class="dropdown"><button class="cf-btn{% if fecha_desde or fecha_hasta %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
+              <div class="dropdown-menu cf-panel shadow p-2" style="min-width:230px;">
+                <div class="mb-1"><small class="text-muted">Desde</small>
+                  <input type="date" class="form-control form-control-sm" value="{{ fecha_desde }}" oninput="document.getElementById('tb-fecha_desde').value=this.value">
+                </div>
+                <div class="mb-2"><small class="text-muted">Hasta</small>
+                  <input type="date" class="form-control form-control-sm" value="{{ fecha_hasta }}" oninput="document.getElementById('tb-fecha_hasta').value=this.value">
+                </div>
+                <div class="d-flex gap-1">
+                  <button type="submit" class="btn btn-sm btn-primary flex-grow-1">Aplicar</button>
+                  {% if fecha_desde or fecha_hasta %}<button type="button" class="btn btn-sm btn-outline-secondary" onclick="cfClear('fecha_desde');cfClear('fecha_hasta')">✕</button>{% endif %}
+                </div>
+              </div>
+            </div>
+          </div></th>
+          <th>Ret/Auto</th>
+
+          {# ICA: columnas del formato de 124 cols SAIMYR (las que tenemos datos) #}
+          {% else %}
+          <th><div class="d-flex align-items-center gap-1">radicado_externo
+            <div class="dropdown"><button class="cf-btn{% if q_consec %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
+              <div class="dropdown-menu cf-panel shadow"><input type="text" name="q_consec" class="form-control form-control-sm" value="{{ q_consec }}" placeholder="Buscar..." autofocus>
+                <div class="d-flex gap-1 mt-2"><button type="submit" class="btn btn-sm btn-primary flex-grow-1">Aplicar</button>{% if q_consec %}<button type="button" class="btn btn-sm btn-outline-secondary" onclick="cfClear('q_consec')">✕</button>{% endif %}</div>
+              </div></div></div></th>
+          <th><div class="d-flex align-items-center gap-1">Nit
+            <div class="dropdown"><button class="cf-btn{% if q_num %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
+              <div class="dropdown-menu cf-panel shadow"><input type="text" name="q_num" class="form-control form-control-sm" value="{{ q_num }}" placeholder="Buscar NIT..." autofocus>
+                <div class="d-flex gap-1 mt-2"><button type="submit" class="btn btn-sm btn-primary flex-grow-1">Aplicar</button>{% if q_num %}<button type="button" class="btn btn-sm btn-outline-secondary" onclick="cfClear('q_num')">✕</button>{% endif %}</div>
+              </div></div></div></th>
+          <th>fecha_declaracion</th><th>tipo</th><th>fecha_presentacion</th><th>medio_presentacion</th>
+          <th><div class="d-flex align-items-center gap-1">año_declaracion
+            <div class="dropdown"><button class="cf-btn{% if caldas_ano_filtro %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown">&#9660;</button>
+              <div class="dropdown-menu cf-panel shadow" style="min-width:140px;"><ul class="cf-val-list">
+                <li><button type="button" class="cf-val-btn{% if not caldas_ano_filtro %} active{% endif %}" onclick="cfVal('hf-caldas_ano','')">Todos</button></li>
+                {% for v in caldas_anos %}{% if v %}<li><button type="button" class="cf-val-btn{% if v == caldas_ano_filtro %} active{% endif %}" onclick="cfVal('hf-caldas_ano','{{ v }}')">{{ v }}</button></li>{% endif %}{% endfor %}
+              </ul></div></div></div></th>
+          <th>año_gravable</th><th>tipo_declaracion</th>
+          <th><div class="d-flex align-items-center gap-1">razon_social
+            <div class="dropdown"><button class="cf-btn{% if q_nombre %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
+              <div class="dropdown-menu cf-panel shadow" style="min-width:200px;"><input type="text" name="q_nombre" class="form-control form-control-sm" value="{{ q_nombre }}" placeholder="Buscar nombre/razón..." autofocus>
+                <div class="d-flex gap-1 mt-2"><button type="submit" class="btn btn-sm btn-primary flex-grow-1">Aplicar</button>{% if q_nombre %}<button type="button" class="btn btn-sm btn-outline-secondary" onclick="cfClear('q_nombre')">✕</button>{% endif %}</div>
+              </div></div></div></th>
+          <th>clase</th><th>direccion</th><th>telefono</th>
+          <th><div class="d-flex align-items-center gap-1">tipo_persona
+            <div class="dropdown"><button class="cf-btn{% if caldas_tipo_persona_filtro %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown">&#9660;</button>
+              <div class="dropdown-menu cf-panel shadow" style="min-width:120px;"><ul class="cf-val-list">
+                <li><button type="button" class="cf-val-btn{% if not caldas_tipo_persona_filtro %} active{% endif %}" onclick="cfVal('hf-caldas_tipo_persona','')">Todos</button></li>
+                <li><button type="button" class="cf-val-btn{% if caldas_tipo_persona_filtro == 'J' %} active{% endif %}" onclick="cfVal('hf-caldas_tipo_persona','J')">J - Jurídica</button></li>
+                <li><button type="button" class="cf-val-btn{% if caldas_tipo_persona_filtro == 'N' %} active{% endif %}" onclick="cfVal('hf-caldas_tipo_persona','N')">N - Natural</button></li>
+              </ul></div></div></div></th>
+          <th>email</th>
+          <th class="text-end">vlr_total_iyc_anual</th>
+          <th class="text-end">vlr_retencion</th>
+          <th class="text-end">vlr_autorretencion</th>
+          <th class="text-end">vlr_anticipo_anterior</th>
+          <th class="text-end">vlr_anticipo_siguiente</th>
+          <th class="text-end">vlr_sanciones</th>
+          <th class="text-end">vlr_interes_mora</th>
+          <th class="text-end">total_a_pagar</th>
+          <th>contrador_o_revisor</th><th>DI_c_o_r</th><th>nombre_c_o_r</th><th>Nro_tarj_prof</th>
+          <th class="text-end">vlr_AVISOS</th><th class="text-end">vlr_SOBRETASA</th>
+          <th>Estado</th>
+          <th><div class="d-flex align-items-center gap-1">Fecha_registro
+            <div class="dropdown"><button class="cf-btn{% if fecha_desde or fecha_hasta %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
+              <div class="dropdown-menu cf-panel shadow p-2" style="min-width:230px;">
+                <div class="mb-1"><small class="text-muted">Desde</small>
+                  <input type="date" class="form-control form-control-sm" value="{{ fecha_desde }}" oninput="document.getElementById('tb-fecha_desde').value=this.value">
+                </div>
+                <div class="mb-2"><small class="text-muted">Hasta</small>
+                  <input type="date" class="form-control form-control-sm" value="{{ fecha_hasta }}" oninput="document.getElementById('tb-fecha_hasta').value=this.value">
+                </div>
+                <div class="d-flex gap-1">
+                  <button type="submit" class="btn btn-sm btn-primary flex-grow-1">Aplicar</button>
+                  {% if fecha_desde or fecha_hasta %}<button type="button" class="btn btn-sm btn-outline-secondary" onclick="cfClear('fecha_desde');cfClear('fecha_hasta')">✕</button>{% endif %}
+                </div>
+              </div>
+            </div>
+          </div></th>
+          {% endif %}
+
+          {# ══════════ OTROS MUNICIPIOS — ENCABEZADO ══════════ #}
+          {% else %}
+
+          {# Consecutivo #}
+          <th>
+            <div class="d-flex align-items-center gap-1">Consecutivo
+              <div class="dropdown">
+                <button class="cf-btn{% if q_consec %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
+                <div class="dropdown-menu cf-panel shadow">
+                  <input type="text" name="q_consec" class="form-control form-control-sm" value="{{ q_consec }}" placeholder="Buscar consecutivo..." autofocus>
+                  <div class="d-flex gap-1 mt-2">
+                    <button type="submit" class="btn btn-sm btn-primary flex-grow-1">Aplicar</button>
+                    {% if q_consec %}<button type="button" class="btn btn-sm btn-outline-secondary" onclick="cfClear('q_consec')">✕</button>{% endif %}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </th>
+          {# NIT #}
+          <th>
+            <div class="d-flex align-items-center gap-1">NIT / Doc.
+              <div class="dropdown">
+                <button class="cf-btn{% if q_num %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
+                <div class="dropdown-menu cf-panel shadow">
+                  <input type="text" name="q_num" class="form-control form-control-sm" value="{{ q_num }}" placeholder="Buscar número..." autofocus>
+                  <div class="d-flex gap-1 mt-2">
+                    <button type="submit" class="btn btn-sm btn-primary flex-grow-1">Aplicar</button>
+                    {% if q_num %}<button type="button" class="btn btn-sm btn-outline-secondary" onclick="cfClear('q_num')">✕</button>{% endif %}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </th>
+          {# Nombre #}
+          <th>
+            <div class="d-flex align-items-center gap-1">Nombre / Razón Social
+              <div class="dropdown">
+                <button class="cf-btn{% if q_nombre %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
+                <div class="dropdown-menu cf-panel shadow" style="min-width:240px;">
+                  <input type="text" name="q_nombre" class="form-control form-control-sm" value="{{ q_nombre }}" placeholder="Buscar nombre..." autofocus>
+                  <div class="d-flex gap-1 mt-2">
+                    <button type="submit" class="btn btn-sm btn-primary flex-grow-1">Aplicar</button>
+                    {% if q_nombre %}<button type="button" class="btn btn-sm btn-outline-secondary" onclick="cfClear('q_nombre')">✕</button>{% endif %}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </th>
+          {% if es_envigado %}
+          <th><div class="d-flex align-items-center gap-1">Periodo
+            <div class="dropdown"><button class="cf-btn{% if caldas_periodo_filtro %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown">&#9660;</button>
+              <div class="dropdown-menu cf-panel shadow" style="min-width:170px;"><ul class="cf-val-list">
+                <li><button type="button" class="cf-val-btn{% if not caldas_periodo_filtro %} active{% endif %}" onclick="cfVal('hf-caldas_periodo','')">Todos</button></li>
+                {% for v in caldas_periodos %}{% if v %}<li><button type="button" class="cf-val-btn{% if v == caldas_periodo_filtro %} active{% endif %}" onclick="cfVal('hf-caldas_periodo','{{ v }}')">{{ v }}</button></li>{% endif %}{% endfor %}
+              </ul></div></div></div></th>
+          <th><div class="d-flex align-items-center gap-1">Año
+            <div class="dropdown"><button class="cf-btn{% if caldas_ano_filtro %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown">&#9660;</button>
+              <div class="dropdown-menu cf-panel shadow" style="min-width:140px;"><ul class="cf-val-list">
+                <li><button type="button" class="cf-val-btn{% if not caldas_ano_filtro %} active{% endif %}" onclick="cfVal('hf-caldas_ano','')">Todos</button></li>
+                {% for v in caldas_anos %}{% if v %}<li><button type="button" class="cf-val-btn{% if v == caldas_ano_filtro %} active{% endif %}" onclick="cfVal('hf-caldas_ano','{{ v }}')">{{ v }}</button></li>{% endif %}{% endfor %}
+              </ul></div></div></div></th>
+          <th><div class="d-flex align-items-center gap-1">Fecha Presentación
+            <div class="dropdown"><button class="cf-btn{% if env_fecha_pres_desde or env_fecha_pres_hasta %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
+              <div class="dropdown-menu cf-panel shadow p-2" style="min-width:230px;">
+                <div class="mb-1"><small class="text-muted">Desde</small>
+                  <input type="date" class="form-control form-control-sm" value="{{ env_fecha_pres_desde }}" oninput="document.getElementById('hf-env_fecha_pres_desde').value=this.value">
+                </div>
+                <div class="mb-2"><small class="text-muted">Hasta</small>
+                  <input type="date" class="form-control form-control-sm" value="{{ env_fecha_pres_hasta }}" oninput="document.getElementById('hf-env_fecha_pres_hasta').value=this.value">
+                </div>
+                <div class="d-flex gap-1">
+                  <button type="submit" class="btn btn-sm btn-primary flex-grow-1">Aplicar</button>
+                  {% if env_fecha_pres_desde or env_fecha_pres_hasta %}<button type="button" class="btn btn-sm btn-outline-secondary" onclick="cfClear('env_fecha_pres_desde');cfClear('env_fecha_pres_hasta')">✕</button>{% endif %}
+                </div>
+              </div>
+            </div>
+          </div></th>
+          <th><div class="d-flex align-items-center gap-1">Fecha Pago
+            <div class="dropdown"><button class="cf-btn{% if env_fecha_pago_desde or env_fecha_pago_hasta %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
+              <div class="dropdown-menu cf-panel shadow p-2" style="min-width:230px;">
+                <div class="mb-1"><small class="text-muted">Desde</small>
+                  <input type="date" class="form-control form-control-sm" value="{{ env_fecha_pago_desde }}" oninput="document.getElementById('hf-env_fecha_pago_desde').value=this.value">
+                </div>
+                <div class="mb-2"><small class="text-muted">Hasta</small>
+                  <input type="date" class="form-control form-control-sm" value="{{ env_fecha_pago_hasta }}" oninput="document.getElementById('hf-env_fecha_pago_hasta').value=this.value">
+                </div>
+                <div class="d-flex gap-1">
+                  <button type="submit" class="btn btn-sm btn-primary flex-grow-1">Aplicar</button>
+                  {% if env_fecha_pago_desde or env_fecha_pago_hasta %}<button type="button" class="btn btn-sm btn-outline-secondary" onclick="cfClear('env_fecha_pago_desde');cfClear('env_fecha_pago_hasta')">✕</button>{% endif %}
+                </div>
+              </div>
+            </div>
+          </div></th>
+          {% else %}
+          <th><div class="d-flex align-items-center gap-1">Fecha Cobro
+            <div class="dropdown"><button class="cf-btn{% if fecha_desde or fecha_hasta %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
+              <div class="dropdown-menu cf-panel shadow p-2" style="min-width:230px;">
+                <div class="mb-1"><small class="text-muted">Desde</small>
+                  <input type="date" class="form-control form-control-sm" value="{{ fecha_desde }}" oninput="document.getElementById('tb-fecha_desde').value=this.value">
+                </div>
+                <div class="mb-2"><small class="text-muted">Hasta</small>
+                  <input type="date" class="form-control form-control-sm" value="{{ fecha_hasta }}" oninput="document.getElementById('tb-fecha_hasta').value=this.value">
+                </div>
+                <div class="d-flex gap-1">
+                  <button type="submit" class="btn btn-sm btn-primary flex-grow-1">Aplicar</button>
+                  {% if fecha_desde or fecha_hasta %}<button type="button" class="btn btn-sm btn-outline-secondary" onclick="cfClear('fecha_desde');cfClear('fecha_hasta')">✕</button>{% endif %}
+                </div>
+              </div>
+            </div>
+          </div></th>
+          <th>Fecha Venc.</th>
+          <th>
+            <div class="d-flex align-items-center gap-1">Descripción
+              <div class="dropdown">
+                <button class="cf-btn{% if q_desc %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
+                <div class="dropdown-menu cf-panel shadow" style="min-width:240px;">
+                  <input type="text" name="q_desc" class="form-control form-control-sm" value="{{ q_desc }}" placeholder="Buscar descripción..." autofocus>
+                  <div class="d-flex gap-1 mt-2">
+                    <button type="submit" class="btn btn-sm btn-primary flex-grow-1">Aplicar</button>
+                    {% if q_desc %}<button type="button" class="btn btn-sm btn-outline-secondary" onclick="cfClear('q_desc')">✕</button>{% endif %}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </th>
+          {% endif %}
+          <th class="text-end">
+            <div class="d-flex align-items-center gap-1 justify-content-end">Total a Pagar
+              <div class="dropdown">
+                <button class="cf-btn{% if q_total_pagar %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
+                <div class="dropdown-menu cf-panel shadow">
+                  <input type="text" class="form-control form-control-sm" value="{{ q_total_pagar }}" placeholder="Buscar valor..." oninput="document.getElementById('hf-q_total_pagar').value=this.value">
+                  <div class="d-flex gap-1 mt-2">
+                    <button type="submit" class="btn btn-sm btn-primary flex-grow-1">Aplicar</button>
+                    {% if q_total_pagar %}<button type="button" class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('hf-q_total_pagar').value='';this.form.submit()">✕</button>{% endif %}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </th>
+          <th>
+            <div class="d-flex align-items-center gap-1">Estado Pago
+              <div class="dropdown">
+                <button class="cf-btn{% if estado_pago_filtro %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown">&#9660;</button>
+                <div class="dropdown-menu cf-panel shadow" style="min-width:190px;">
+                  <ul class="cf-val-list">
+                    <li><button type="button" class="cf-val-btn{% if not estado_pago_filtro %} active{% endif %}" onclick="cfVal('hf-estado_pago','')">Todos</button></li>
+                    {% for v in estados_pago %}{% if v %}<li><button type="button" class="cf-val-btn{% if v == estado_pago_filtro %} active{% endif %}" onclick="cfVal('hf-estado_pago','{{ v }}')">{{ v }}</button></li>{% endif %}{% endfor %}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </th>
+          {% if not es_envigado %}
+          <th>
+            <div class="d-flex align-items-center gap-1">Estado CXC
+              <div class="dropdown">
+                <button class="cf-btn{% if estado_filtro %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown">&#9660;</button>
+                <div class="dropdown-menu cf-panel shadow" style="min-width:160px;">
+                  <ul class="cf-val-list">
+                    <li><button type="button" class="cf-val-btn{% if not estado_filtro %} active{% endif %}" onclick="cfVal('hf-estado','')">Todos</button></li>
+                    <li><button type="button" class="cf-val-btn{% if estado_filtro == '__blank__' %} active{% endif %}" onclick="cfVal('hf-estado','__blank__')" style="color:#adb5bd;font-style:italic;">Sin estado</button></li>
+                    {% for v in estados %}{% if v %}<li><button type="button" class="cf-val-btn{% if v == estado_filtro %} active{% endif %}" onclick="cfVal('hf-estado','{{ v }}')">{{ v }}</button></li>{% endif %}{% endfor %}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </th>
+          {% endif %}
+          {% endif %}{# fin es_caldas #}
+
+          {% else %}{# ── DETALLE / PAGOS ── #}
+
+          {# ══════════ CALDAS — PAGOS (19 cols SAIMYR) ══════════ #}
+          {% if es_caldas %}
+          <th><div class="d-flex align-items-center gap-1">radicado_externo
+            <div class="dropdown"><button class="cf-btn{% if q_consec %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
+              <div class="dropdown-menu cf-panel shadow"><input type="text" name="q_consec" class="form-control form-control-sm" value="{{ q_consec }}" placeholder="Buscar..." autofocus>
+                <div class="d-flex gap-1 mt-2"><button type="submit" class="btn btn-sm btn-primary flex-grow-1">Aplicar</button>{% if q_consec %}<button type="button" class="btn btn-sm btn-outline-secondary" onclick="cfClear('q_consec')">✕</button>{% endif %}</div>
+              </div></div></div></th>
+          <th>comprobante_pago</th>
+          <th><div class="d-flex align-items-center gap-1">Fecha_pago
+            <div class="dropdown"><button class="cf-btn{% if fecha_desde or fecha_hasta %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
+              <div class="dropdown-menu cf-panel shadow p-2" style="min-width:230px;">
+                <div class="mb-1"><small class="text-muted">Desde</small>
+                  <input type="date" class="form-control form-control-sm" value="{{ fecha_desde }}" oninput="document.getElementById('tb-fecha_desde').value=this.value">
+                </div>
+                <div class="mb-2"><small class="text-muted">Hasta</small>
+                  <input type="date" class="form-control form-control-sm" value="{{ fecha_hasta }}" oninput="document.getElementById('tb-fecha_hasta').value=this.value">
+                </div>
+                <div class="d-flex gap-1">
+                  <button type="submit" class="btn btn-sm btn-primary flex-grow-1">Aplicar</button>
+                  {% if fecha_desde or fecha_hasta %}<button type="button" class="btn btn-sm btn-outline-secondary" onclick="cfClear('fecha_desde');cfClear('fecha_hasta')">✕</button>{% endif %}
+                </div>
+              </div>
+            </div>
+          </div></th>
+          <th><div class="d-flex align-items-center gap-1">Tipo Persona
+            <div class="dropdown"><button class="cf-btn{% if caldas_tipo_persona_filtro %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown">&#9660;</button>
+              <div class="dropdown-menu cf-panel shadow" style="min-width:120px;"><ul class="cf-val-list">
+                <li><button type="button" class="cf-val-btn{% if not caldas_tipo_persona_filtro %} active{% endif %}" onclick="cfVal('hf-caldas_tipo_persona','')">Todos</button></li>
+                <li><button type="button" class="cf-val-btn{% if caldas_tipo_persona_filtro == 'J' %} active{% endif %}" onclick="cfVal('hf-caldas_tipo_persona','J')">J</button></li>
+                <li><button type="button" class="cf-val-btn{% if caldas_tipo_persona_filtro == 'N' %} active{% endif %}" onclick="cfVal('hf-caldas_tipo_persona','N')">N</button></li>
+              </ul></div></div></div></th>
+          <th>tipo_doc_id</th>
+          <th><div class="d-flex align-items-center gap-1">DI_Tercero
+            <div class="dropdown"><button class="cf-btn{% if q_num %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
+              <div class="dropdown-menu cf-panel shadow"><input type="text" name="q_num" class="form-control form-control-sm" value="{{ q_num }}" placeholder="Buscar NIT..." autofocus>
+                <div class="d-flex gap-1 mt-2"><button type="submit" class="btn btn-sm btn-primary flex-grow-1">Aplicar</button>{% if q_num %}<button type="button" class="btn btn-sm btn-outline-secondary" onclick="cfClear('q_num')">✕</button>{% endif %}</div>
+              </div></div></div></th>
+          <th>dv</th>
+          <th><div class="d-flex align-items-center gap-1">Primer_apellido
+            <div class="dropdown"><button class="cf-btn{% if q_nombre %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
+              <div class="dropdown-menu cf-panel shadow" style="min-width:200px;"><input type="text" name="q_nombre" class="form-control form-control-sm" value="{{ q_nombre }}" placeholder="Buscar nombre..." autofocus>
+                <div class="d-flex gap-1 mt-2"><button type="submit" class="btn btn-sm btn-primary flex-grow-1">Aplicar</button>{% if q_nombre %}<button type="button" class="btn btn-sm btn-outline-secondary" onclick="cfClear('q_nombre')">✕</button>{% endif %}</div>
+              </div></div></div></th>
+          <th>Segundo_apellido</th><th>nombres_tercero</th>
+          <th>dir_tercero</th><th>tel_tercero</th><th>email_tercero</th>
+          <th><div class="d-flex align-items-center gap-1">clasificacion
+            <div class="dropdown"><button class="cf-btn{% if caldas_clasi_filtro %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown">&#9660;</button>
+              <div class="dropdown-menu cf-panel shadow" style="min-width:120px;"><ul class="cf-val-list">
+                <li><button type="button" class="cf-val-btn{% if not caldas_clasi_filtro %} active{% endif %}" onclick="cfVal('hf-caldas_clasi','')">Todos</button></li>
+                {% for v in caldas_clasif %}{% if v %}<li><button type="button" class="cf-val-btn{% if v == caldas_clasi_filtro %} active{% endif %}" onclick="cfVal('hf-caldas_clasi','{{ v }}')">{{ v }}</button></li>{% endif %}{% endfor %}
+              </ul></div></div></div></th>
+          <th>concepto_externo</th>
+          <th><div class="d-flex align-items-center gap-1">código_cpto_saimyr
+            <div class="dropdown"><button class="cf-btn{% if q_concepto %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown">&#9660;</button>
+              <div class="dropdown-menu cf-panel shadow" style="min-width:160px;"><ul class="cf-val-list">
+                <li><button type="button" class="cf-val-btn{% if not q_concepto %} active{% endif %}" onclick="cfVal('hf-q_concepto','')">Todos</button></li>
+                {% for v in codigos_concepto %}{% if v %}<li><button type="button" class="cf-val-btn{% if v == q_concepto %} active{% endif %}" onclick="cfVal('hf-q_concepto','{{ v }}')">{{ v }}</button></li>{% endif %}{% endfor %}
+              </ul></div></div></div></th>
+          <th class="text-end">valor_pagado</th>
+          <th>código_banco</th><th>número_cuenta</th>
+
+          {# ══════════ OTROS MUNICIPIOS — DETALLE ══════════ #}
+          {% else %}
+          <th>
+            <div class="d-flex align-items-center gap-1">Consecutivo CXC
+              <div class="dropdown">
+                <button class="cf-btn{% if q_consec %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
+                <div class="dropdown-menu cf-panel shadow">
+                  <input type="text" name="q_consec" class="form-control form-control-sm" value="{{ q_consec }}" placeholder="Buscar consecutivo..." autofocus>
+                  <div class="d-flex gap-1 mt-2">
+                    <button type="submit" class="btn btn-sm btn-primary flex-grow-1">Aplicar</button>
+                    {% if q_consec %}<button type="button" class="btn btn-sm btn-outline-secondary" onclick="cfClear('q_consec')">✕</button>{% endif %}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </th>
+          {% if es_envigado %}<th>NIT</th><th>Nombre</th>{% endif %}
+          <th>
+            <div class="d-flex align-items-center gap-1">Código Concepto
+              <div class="dropdown">
+                <button class="cf-btn{% if q_concepto %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown">&#9660;</button>
+                <div class="dropdown-menu cf-panel shadow" style="min-width:160px;">
+                  <ul class="cf-val-list">
+                    <li><button type="button" class="cf-val-btn{% if not q_concepto %} active{% endif %}" onclick="cfVal('hf-q_concepto','')">Todos</button></li>
+                    {% for v in codigos_concepto %}{% if v %}<li><button type="button" class="cf-val-btn{% if v == q_concepto %} active{% endif %}" onclick="cfVal('hf-q_concepto','{{ v }}')">{{ v }}</button></li>{% endif %}{% endfor %}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </th>
+          {% if es_envigado %}
+          <th>Descripción</th>
+          {% else %}
+          <th>
+            <div class="d-flex align-items-center gap-1">Centro Costo
+              <div class="dropdown">
+                <button class="cf-btn{% if q_centro %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown">&#9660;</button>
+                <div class="dropdown-menu cf-panel shadow" style="min-width:160px;">
+                  <ul class="cf-val-list">
+                    <li><button type="button" class="cf-val-btn{% if not q_centro %} active{% endif %}" onclick="cfVal('hf-q_centro','')">Todos</button></li>
+                    {% for v in centros_costo %}{% if v %}<li><button type="button" class="cf-val-btn{% if v == q_centro %} active{% endif %}" onclick="cfVal('hf-q_centro','{{ v }}')">{{ v }}</button></li>{% endif %}{% endfor %}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </th>
+          <th class="text-end">Cantidad</th>
+          <th class="text-end">
+            <div class="d-flex align-items-center gap-1 justify-content-end">Valor Unitario
+              <div class="dropdown">
+                <button class="cf-btn{% if q_valor_unit %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
+                <div class="dropdown-menu cf-panel shadow">
+                  <input type="text" class="form-control form-control-sm" value="{{ q_valor_unit }}" placeholder="Buscar valor..." oninput="document.getElementById('hf-q_valor_unit').value=this.value">
+                  <div class="d-flex gap-1 mt-2">
+                    <button type="submit" class="btn btn-sm btn-primary flex-grow-1">Aplicar</button>
+                    {% if q_valor_unit %}<button type="button" class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('hf-q_valor_unit').value='';this.form.submit()">✕</button>{% endif %}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </th>
+          {% endif %}
+          <th class="text-end">
+            <div class="d-flex align-items-center gap-1 justify-content-end">Valor Total
+              <div class="dropdown">
+                <button class="cf-btn{% if q_valor_tot %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
+                <div class="dropdown-menu cf-panel shadow">
+                  <input type="text" class="form-control form-control-sm" value="{{ q_valor_tot }}" placeholder="Buscar valor..." oninput="document.getElementById('hf-q_valor_tot').value=this.value">
+                  <div class="d-flex gap-1 mt-2">
+                    <button type="submit" class="btn btn-sm btn-primary flex-grow-1">Aplicar</button>
+                    {% if q_valor_tot %}<button type="button" class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('hf-q_valor_tot').value='';this.form.submit()">✕</button>{% endif %}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </th>
+          {% endif %}{# fin es_caldas detalle #}
+
+          {% endif %}{# fin tab encabezado/detalle #}
+        </tr>
+      </thead>
+      <tbody>
+        {% for obj in page_obj %}
+        {% if tab == 'encabezado' %}
+
+        {# ══════════ CALDAS — FILA DECLARACIONES ══════════ #}
+        {% if es_caldas %}
+        <tr>
+          {% if not es_caldas_ica %}
+          {# AUTO / RETE — 16 cols visibles del formato 32 #}
+          <td class="font-monospace small">{{ obj.consecutivo_cxc }}</td>
+          <td class="small">{{ obj.datos_extra.ano|default:"—" }}</td>
+          <td class="small">{{ obj.datos_extra.periodo|default:"—" }}</td>
+          <td class="small">{{ obj.datos_extra.tipo_dec|default:"—" }}</td>
+          <td class="small">{{ obj.datos_extra.tipo_persona|default:"—" }}</td>
+          <td class="small">{{ obj.numero_documento }}</td>
+          <td class="small">{{ obj.primer_apellido|default:"—" }}</td>
+          <td class="small">{{ obj.segundo_apellido|default:"—" }}</td>
+          <td class="small">{{ obj.razon_social|default:obj.primer_nombre|default:"—" }}</td>
+          <td class="small">{{ obj.datos_extra.dir_tercero|default:"—" }}</td>
+          <td class="small">{{ obj.datos_extra.tel_tercero|default:"—" }}</td>
+          <td class="small">{{ obj.datos_extra.email_tercero|default:"—" }}</td>
+          <td class="text-end small cop-money">{{ obj.total_a_pagar|default:"" }}</td>
+          <td class="small">W</td>
+          <td class="small">{{ obj.fecha_cobro|date:"d/m/Y"|default:"—" }}</td>
+          <td class="small fw-semibold">{{ caldas_ret_auto }}</td>
+          {% else %}
+          {# ICA — columnas del formato de 124 cols (las que tenemos) #}
+          {% with t=caldas_ica_totals|get_item:obj.pk %}
+          <td class="font-monospace small">{{ obj.consecutivo_cxc }}</td>
+          <td class="small">{{ obj.numero_documento }}</td>
+          <td class="small">{{ obj.fecha_cobro|date:"d/m/Y"|default:"—" }}</td>
+          <td class="small">DEC</td>
+          <td class="small">{{ obj.fecha_cobro|date:"d/m/Y"|default:"—" }}</td>
+          <td class="small">W</td>
+          <td class="small">{{ obj.datos_extra.ano|default:"—" }}</td>
+          <td class="small">{{ obj.datos_extra.ano|default:"—" }}</td>
+          <td class="small">{{ obj.datos_extra.tipo_dec|default:"—" }}</td>
+          <td class="small">{{ obj.razon_social|default:obj.primer_nombre|default:"—" }}</td>
+          <td class="small">{{ t.clase|default:"" }}</td>
+          <td class="small">{{ obj.datos_extra.dir_tercero|default:"—" }}</td>
+          <td class="small">{{ obj.datos_extra.tel_tercero|default:"—" }}</td>
+          <td class="small">{{ obj.datos_extra.tipo_persona|default:"—" }}</td>
+          <td class="small">{{ obj.datos_extra.email_tercero|default:"—" }}</td>
+          <td class="text-end small cop-money">{{ t.iyc|default:"" }}</td>
+          <td class="text-end small cop-money">{{ t.retencion|default:"" }}</td>
+          <td class="text-end small cop-money">{{ t.autorretencion|default:"" }}</td>
+          <td class="text-end small cop-money">{{ t.anticipo|default:"" }}</td>
+          <td class="text-end small cop-money"></td>
+          <td class="text-end small cop-money">{{ t.sanciones|default:"" }}</td>
+          <td class="text-end small cop-money">{{ t.intereses|default:"" }}</td>
+          <td class="text-end small cop-money">{{ obj.total_a_pagar|default:"" }}</td>
+          <td class="small"></td><td class="small"></td><td class="small"></td><td class="small"></td>
+          <td class="text-end small cop-money">{{ t.avisos|default:"" }}</td>
+          <td class="text-end small cop-money">{{ t.bomberil|default:"" }}</td>
+          <td class="small">W</td>
+          <td class="small">{{ obj.fecha_cobro|date:"d/m/Y"|default:"—" }}</td>
+          {% endwith %}
+          {% endif %}
+        </tr>
+
+        {# ══════════ OTROS MUNICIPIOS — FILA ENCABEZADO ══════════ #}
+        {% else %}
+        <tr>
+          <td class="font-monospace small">{{ obj.consecutivo_cxc }}</td>
+          <td class="small">{{ obj.numero_documento }}</td>
+          <td class="small">{{ obj.nombre_completo }}</td>
+          {% if es_envigado %}
+          <td class="small">{{ obj.datos_extra.periodo|default:"—" }}</td>
+          <td class="small">{{ obj.datos_extra.ano|default:"—" }}</td>
+          <td class="small">{{ obj.datos_extra.fecha_pres|default:"—" }}</td>
+          <td class="small">{{ obj.datos_extra.fecha_pago|default:"—" }}</td>
+          {% else %}
+          <td class="small cp-cell" title="Clic para copiar">{{ obj.fecha_cobro|date:"d/m/Y"|default:"—" }}</td>
+          <td class="small cp-cell" title="Clic para copiar">{{ obj.fecha_vencimiento|date:"d/m/Y"|default:"—" }}</td>
+          <td class="small text-truncate" style="max-width:220px;" title="{{ obj.descripcion }}">{{ obj.descripcion }}</td>
+          {% endif %}
+          <td class="text-end small cop-money">{{ obj.total_a_pagar|default:"" }}</td>
+          <td><span class="badge {% if 'PAGO REALIZADO' in obj.estado_pago|upper %}bg-success{% elif obj.estado_pago %}bg-warning text-dark{% else %}bg-secondary{% endif %} small">{% if obj.estado_pago %}{{ obj.estado_pago }}{% else %}—{% endif %}</span></td>
+          {% if not es_envigado %}<td><span class="badge bg-light text-dark border small">{{ obj.estado_cxc|default:"—" }}</span></td>{% endif %}
+        </tr>
+        {% endif %}{# fin es_caldas encabezado #}
+
+        {% else %}{# ── DETALLE / PAGOS ── #}
+
+        {# ══════════ CALDAS — FILA PAGOS (19 cols SAIMYR) ══════════ #}
+        {% if es_caldas %}
+        <tr>
+          <td class="font-monospace small">{{ obj.encabezado.consecutivo_cxc }}</td>
+          <td class="font-monospace small">{{ obj.encabezado.consecutivo_cxc }}</td>
+          <td class="small">{{ obj.encabezado.fecha_cobro|date:"d/m/Y"|default:"—" }}</td>
+          <td class="small">{{ obj.encabezado.datos_extra.tipo_persona|default:"" }}</td>
+          <td class="small">{{ obj.encabezado.tipo_documento }}</td>
+          <td class="small">{{ obj.encabezado.numero_documento }}</td>
+          <td class="small"></td>
+          <td class="small">{{ obj.encabezado.primer_apellido|default:"" }}</td>
+          <td class="small">{{ obj.encabezado.segundo_apellido|default:"" }}</td>
+          <td class="small">{{ obj.encabezado.primer_nombre|default:"" }}</td>
+          <td class="small">{{ obj.encabezado.datos_extra.dir_tercero|default:"" }}</td>
+          <td class="small">{{ obj.encabezado.datos_extra.tel_tercero|default:"" }}</td>
+          <td class="small">{{ obj.encabezado.datos_extra.email_tercero|default:"" }}</td>
+          <td class="small">{{ obj.centro_costo }}</td>
+          <td class="small">{{ caldas_desc_map|get_item:obj.pk }}</td>
+          <td class="small fw-semibold">{{ obj.codigo_concepto }}</td>
+          <td class="text-end small cop-money">{{ obj.valor_total|default:"" }}</td>
+          <td class="small">1</td>
+          <td class="small">2</td>
+        </tr>
+
+        {# ══════════ OTROS MUNICIPIOS — FILA DETALLE ══════════ #}
+        {% else %}
+        <tr>
+          <td class="font-monospace small">{{ obj.encabezado.consecutivo_cxc }}</td>
+          {% if es_envigado %}
+          <td class="small">{{ obj.encabezado.numero_documento }}</td>
+          <td class="small">{{ obj.encabezado.razon_social|default:obj.encabezado.nombre_completo }}</td>
+          {% endif %}
+          <td class="small fw-semibold">{{ obj.codigo_concepto }}</td>
+          {% if es_envigado %}
+          <td class="small">{{ obj.centro_costo }}</td>
+          {% else %}
+          <td class="small">{{ obj.centro_costo }}</td>
+          <td class="text-end small">{{ obj.cantidad }}</td>
+          <td class="text-end small cop-money">{{ obj.valor_unitario|default:"" }}</td>
+          {% endif %}
+          <td class="text-end small fw-semibold cop-money">{{ obj.valor_total|default:"" }}</td>
+        </tr>
+        {% endif %}{# fin es_caldas detalle #}
+
+        {% endif %}{# fin tab encabezado/detalle #}
+        {% empty %}
+        <tr><td colspan="10" class="text-center text-muted py-4">Sin registros.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- PAGINATION -->
+{% if page_obj.has_other_pages %}
+<nav class="mt-3">
+  <ul class="pagination pagination-sm justify-content-center mb-0">
+    <li class="page-item {% if not page_obj.has_previous %}disabled{% endif %}">
+      <a class="page-link" href="?tab={{ tab }}&q={{ q }}&fecha_desde={{ fecha_desde }}&fecha_hasta={{ fecha_hasta }}&estado={{ estado_filtro }}&per_page={{ per_page }}&page=1">&#124;&laquo;</a>
+    </li>
+    <li class="page-item {% if not page_obj.has_previous %}disabled{% endif %}">
+      <a class="page-link" href="?tab={{ tab }}&q={{ q }}&fecha_desde={{ fecha_desde }}&fecha_hasta={{ fecha_hasta }}&estado={{ estado_filtro }}&per_page={{ per_page }}&page={% if page_obj.has_previous %}{{ page_obj.previous_page_number }}{% else %}1{% endif %}">&#8249;</a>
+    </li>
+    <li class="page-item disabled">
+      <span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+    </li>
+    <li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">
+      <a class="page-link" href="?tab={{ tab }}&q={{ q }}&fecha_desde={{ fecha_desde }}&fecha_hasta={{ fecha_hasta }}&estado={{ estado_filtro }}&per_page={{ per_page }}&page={% if page_obj.has_next %}{{ page_obj.next_page_number }}{% else %}{{ page_obj.paginator.num_pages }}{% endif %}">&#8250;</a>
+    </li>
+    <li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">
+      <a class="page-link" href="?tab={{ tab }}&q={{ q }}&fecha_desde={{ fecha_desde }}&fecha_hasta={{ fecha_hasta }}&estado={{ estado_filtro }}&per_page={{ per_page }}&page={{ page_obj.paginator.num_pages }}">&raquo;&#124;</a>
+    </li>
+  </ul>
+</nav>
+{% endif %}
+
+</form>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Formato peso colombiano: $ 8.040.801
+(function(){
+  var fmt = new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  });
+  document.querySelectorAll(".cop-money").forEach(function(td){
+    var raw = td.textContent.trim();
+    if(!raw) { td.textContent = "—"; return; }
+    var n = parseFloat(raw);
+    td.textContent = isNaN(n) ? raw : fmt.format(n);
+  });
+})();
+
+// Selecciona un valor en dropdown de lista y envía el form
+function cfVal(hiddenId, value) {
+  document.getElementById(hiddenId).value = value;
+  document.getElementById("filter-form").submit();
+}
+
+// Limpia un campo de texto y envía el form
+function cfClear(fieldName) {
+  var el = document.querySelector('[name="' + fieldName + '"]');
+  if (el) el.value = "";
+  document.getElementById("filter-form").submit();
+}
+
+// Filtra los ítems de un dropdown de lista según lo que escribe el usuario
+function cfSearch(input, listId) {
+  var q = input.value.toLowerCase();
+  var items = document.getElementById(listId).querySelectorAll("li");
+  items.forEach(function(li, i) {
+    if (i === 0) return; // "Todas" siempre visible
+    li.style.display = li.textContent.toLowerCase().includes(q) ? "" : "none";
+  });
+}
+
+// Clic en celda de fecha → copiar al portapapeles
+document.addEventListener("click", function(e) {
+  var td = e.target.closest("td.cp-cell");
+  if (!td) return;
+  var txt = td.textContent.trim();
+  if (!txt || txt === "—") return;
+  navigator.clipboard.writeText(txt).then(function() {
+    var orig = td.style.background;
+    td.style.background = "#d1fae5";
+    setTimeout(function(){ td.style.background = orig; }, 600);
+  });
+});
+
+document.querySelectorAll(".tab-btn").forEach(function(btn){
+  btn.addEventListener("click", function(){
+    document.getElementById("active-tab").value = this.dataset.tab;
+    var form = document.getElementById("filter-form");
+    var pageInput = form.querySelector("input[name=page]");
+    if(pageInput) pageInput.value = 1;
+    form.submit();
+  });
+});
+</script>
+{% endblock %}

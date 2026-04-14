@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Ejecutar — {{ proceso.nombre }}{% endblock %}
+{% block breadcrumb %}
+ &rsaquo; <a href="{% url 'proceso_list' %}">Procesos</a>
+ &rsaquo; <span>{{ proceso.nombre }}</span>
+{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-7">
+    <div class="card shadow-sm">
+      <div class="card-header" style="background:var(--color-primario);color:#fff;">
+        <h5 class="mb-0"><i class="bi bi-play-circle me-2"></i>{{ proceso.nombre }}</h5>
+      </div>
+      <div class="card-body">
+        {% if ultima %}
+        <div class="alert alert-light border small mb-3">
+          <strong>Última ejecución:</strong> {{ ultima.fecha_inicio|date:"d/m/Y H:i" }}
+          &nbsp;|&nbsp; <span class="badge {% if ultima.estado == 'COMPLETADO' %}bg-success{% elif ultima.estado == 'ERROR' %}bg-danger{% else %}bg-secondary{% endif %}">{{ ultima.estado }}</span>
+          &nbsp;|&nbsp; {{ ultima.registros_nuevos }} nuevos, {{ ultima.registros_duplicados }} duplicados
+        </div>
+        {% endif %}
+
+        <form method="post" enctype="multipart/form-data" id="ejecutar-form">
+          {% csrf_token %}
+          {% for field in form %}
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+            {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+          {% endfor %}
+          <div class="d-flex gap-2 mt-3">
+            <button type="submit" class="btn btn-primary" id="btn-ejecutar">
+              <i class="bi bi-play-fill me-1"></i>Ejecutar proceso
+            </button>
+            <a href="{% url 'proceso_list' %}" class="btn btn-outline-secondary">Cancelar</a>
+          </div>
+        </form>
+
+        {% if user.is_admin %}
+        <hr class="my-4">
+        <div class="border border-danger rounded p-3">
+          <h6 class="text-danger mb-1"><i class="bi bi-trash me-1"></i>Zona de peligro</h6>
+          <p class="small text-muted mb-3">
+            Elimina <strong>todos</strong> los encabezados, detalles y ejecuciones de este proceso.
+            Esta acción no se puede deshacer.
+            {% if proceso.encabezados.count > 0 %}
+            Actualmente hay <strong>{{ proceso.encabezados.count }}</strong> encabezados cargados.
+            {% else %}
+            No hay datos cargados.
+            {% endif %}
+          </p>
+          <form method="post" action="{% url 'limpiar_proceso' proceso.id %}" id="form-limpiar"
+                onsubmit="return confirm('¿Seguro que deseas borrar TODOS los datos de «{{ proceso.nombre }}»? Esta acción no se puede deshacer.');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline-danger btn-sm">
+              <i class="bi bi-trash me-1"></i>Limpiar todos los datos
+            </button>
+          </form>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+document.getElementById("ejecutar-form").addEventListener("submit", function(){
+  var btn = document.getElementById("btn-ejecutar");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Procesando...';
+});
+</script>
+{% endblock %}

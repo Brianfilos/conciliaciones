@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Perfil{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-5">
+    <div class="card shadow-sm">
+      <div class="card-header" style="background:var(--color-primario);color:#fff;"><h5 class="mb-0">Mi Perfil</h5></div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-5 small">Usuario</dt><dd class="col-7 small">{{ user.username }}</dd>
+          <dt class="col-5 small">Nombre</dt><dd class="col-7 small">{{ user.get_full_name|default:"—" }}</dd>
+          <dt class="col-5 small">Correo</dt><dd class="col-7 small">{{ user.email }}</dd>
+          <dt class="col-5 small">Municipio</dt><dd class="col-7 small">{{ user.municipio|default:"—" }}</dd>
+          <dt class="col-5 small">Rol</dt><dd class="col-7 small">{{ user.get_rol_display }}</dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

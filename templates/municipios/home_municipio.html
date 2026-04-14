@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ municipio.nombre }} - Inicio{% endblock %}
+
+{% block nav_home_active %}active{% endblock %}
+
+{% block breadcrumb_items %}
+    <li class="breadcrumb-item active text-white">{{ municipio.nombre }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="p-4">
+    <!-- Municipality header card -->
+    <div class="municipio-header-card mb-4" style="background: linear-gradient(135deg, var(--color-primario), var(--color-secundario));">
+        <div class="d-flex align-items-center gap-3">
+            {% if municipio.get_logo_url %}
+                <img src="{{ municipio.get_logo_url }}" alt="Logo {{ municipio.nombre }}" style="height:64px; object-fit:contain; filter:brightness(0) invert(1);">
+            {% else %}
+                <i class="bi bi-building-fill" style="font-size:3rem; color:#fff;"></i>
+            {% endif %}
+            <div>
+                <h1 class="text-white mb-0">{{ municipio.nombre }}</h1>
+                <p class="text-white-50 mb-0">Sistema de Conciliaciones CXC</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick stats -->
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-icon" style="color: var(--color-primario);">
+                    <i class="bi bi-play-circle-fill"></i>
+                </div>
+                <div class="stat-info">
+                    <span class="stat-value">{{ procesos.count }}</span>
+                    <span class="stat-label">Procesos activos</span>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="stat-card">
+                <div class="stat-icon" style="color: #198754;">
+                    <i class="bi bi-check-circle-fill"></i>
+                </div>
+                <div class="stat-info">
+                    <span class="stat-value">{{ ultimas_ejecuciones.count }}</span>
+                    <span class="stat-label">Ejecuciones recientes</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Processes cards -->
+    <h2 class="section-title mb-3">Procesos disponibles</h2>
+    {% if procesos %}
+        <div class="row g-3">
+            {% for proceso in procesos %}
+                <div class="col-md-6 col-xl-4">
+                    <div class="proceso-card">
+                        <div class="proceso-card-header" style="background: var(--color-primario);">
+                            <i class="bi bi-layers-fill me-2"></i>
+                            {{ proceso.nombre }}
+                        </div>
+                        <div class="proceso-card-body">
+                            {% if proceso.descripcion %}
+                                <p class="text-muted small mb-3">{{ proceso.descripcion }}</p>
+                            {% endif %}
+                            <div class="d-flex gap-2">
+                                <a href="{% url 'ejecutar_proceso' proceso_id=proceso.id %}"
+                                   class="btn btn-sm btn-primary flex-fill">
+                                    <i class="bi bi-play-fill me-1"></i>Ejecutar
+                                </a>
+                                <a href="{% url 'dashboard_explorer' proceso_id=proceso.id %}"
+                                   class="btn btn-sm btn-outline-secondary flex-fill">
+                                    <i class="bi bi-table me-1"></i>Ver resultados
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle me-2"></i>
+            No hay procesos configurados para este municipio.
+        </div>
+    {% endif %}
+
+    <!-- Recent executions -->
+    {% if ultimas_ejecuciones %}
+        <h2 class="section-title mt-4 mb-3">Últimas ejecuciones</h2>
+        <div class="table-responsive">
+            <table class="table table-sm data-table">
+                <thead>
+                    <tr>
+                        <th>Proceso</th>
+                        <th>Usuario</th>
+                        <th>Fecha</th>
+                        <th>Estado</th>
+                        <th>Nuevos</th>
+                        <th>Duplicados</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ejec in ultimas_ejecuciones %}
+                        <tr>
+                            <td>{{ ejec.proceso.nombre }}</td>
+                            <td>{{ ejec.usuario.username }}</td>
+                            <td>{{ ejec.fecha_inicio|date:"d/m/Y H:i" }}</td>
+                            <td>
+                                <span class="badge {% if ejec.estado == 'COMPLETADO' %}bg-success{% elif ejec.estado == 'ERROR' %}bg-danger{% elif ejec.estado == 'EJECUTANDO' %}bg-warning{% else %}bg-secondary{% endif %}">
+                                    {{ ejec.get_estado_display }}
+                                </span>
+                            </td>
+                            <td>{{ ejec.registros_nuevos }}</td>
+                            <td>{{ ejec.registros_duplicados }}</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
