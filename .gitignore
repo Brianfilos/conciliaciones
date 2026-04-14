@@ -1,0 +1,39 @@
+# Entorno virtual
+venv/
+env/
+.venv/
+
+# Variables de entorno (NUNCA subir al repo)
+.env
+*.env
+
+# Base de datos local
+db.sqlite3
+
+# Archivos subidos por usuarios (se generan en el VPS)
+media/
+
+# Python compilado
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Archivos estáticos generados (se regeneran con collectstatic)
+staticfiles/
+
+# Carpetas de referencia local (no las necesita el VPS)
+MUNICIPIOS/
+GOBS/
+
+# Archivos de notas y scripts de utilidad
+SESION_*.txt
+chat.txt
+_*.py
+
+# Claude Code
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
