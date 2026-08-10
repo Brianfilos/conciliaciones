@@ -76,19 +76,22 @@ class ProcesadorEnvigado:
         act.columns = [c.strip() for c in act.columns]
 
         # Consecutivo como clave (sin transformación)
-        dec["consecutivo_cxc"] = dec["Consecutivo"].astype(str).str.strip()
+        consec_col = next((c for c in dec.columns if "Consecutivo" in c), None)
+        if not consec_col:
+            raise ValueError(f"No se encontró columna 'Consecutivo' en declaraciones. Columnas: {list(dec.columns)}")
+        dec["consecutivo_cxc"] = dec[consec_col].astype(str).str.strip()
         dec["consecutivo_original"] = dec["consecutivo_cxc"]
 
         dec["fecha_cobro"]      = self._fecha(dec.get("Fecha Pago"))
         dec["fecha_vencimiento"] = self._fecha(dec.get("Fecha de presentación"))
         dec["total_a_pagar"]    = dec.get("23. TOTAL A PAGAR ($ COP)")
-        dec["estado_pago"]      = dec.get("Estado Pago", "").fillna("").astype(str).str.replace("✓ ", "", regex=False).str.replace("✓", "", regex=False).str.strip()
+        dec["estado_pago"]      = dec.get("Estado Pago", pd.Series([""] * len(dec))).fillna("").astype(str).str.replace("✓ ", "", regex=False).str.replace("✓", "", regex=False).str.strip()
         dec["estado_cxc"]       = ""  # Sin archivo CXC
 
-        periodo = dec.get("1. Periodo declarado", "").fillna("")
-        ano     = dec.get("1.1 Año", 0).fillna(0)
+        periodo = dec.get("1. Periodo declarado", pd.Series([""] * len(dec))).fillna("")
+        ano     = dec.get("1.1 Año", pd.Series([0] * len(dec))).fillna(0)
         consec  = dec["consecutivo_cxc"]
-        dec["descripcion"] = "AUTORRETENCION " + periodo.astype(str) + " " + ano.astype(int).astype(str) + " Radicado No. " + consec
+        dec["descripcion"] = "AUTORRETENCION " + periodo.astype(str) + " " + ano.astype(float).astype(int).astype(str) + " Radicado No. " + consec
 
         # Guardar sanciones e intereses en datos_extra para el TXT
         san_col = "20.1 Valor sanción ($ COP)"
@@ -119,7 +122,10 @@ class ProcesadorEnvigado:
         df_enc["datos_extra"] = dec.apply(make_extra, axis=1)
 
         # ── DETALLES desde actividades ────────────────────────────────────────
-        act["consecutivo_cxc"] = act["Consecutivo"].astype(str).str.strip()
+        act_consec_col = next((c for c in act.columns if "Consecutivo" in c), None)
+        if not act_consec_col:
+            raise ValueError(f"No se encontró columna 'Consecutivo' en actividades. Columnas: {list(act.columns)}")
+        act["consecutivo_cxc"] = act[act_consec_col].astype(str).str.strip()
 
         ciiu_col = (next((c for c in act.columns if "CIIU" in c.upper()), None) or
                    next((c for c in act.columns if "Código" in c and "establecimiento" not in c.lower()), None))
@@ -192,12 +198,12 @@ class ProcesadorEnvigado:
         dec["fecha_cobro"]          = self._fecha(dec.get("Fecha Pago"))
         dec["fecha_vencimiento"]    = self._fecha(dec.get("Fecha de presentación"))
         dec["total_a_pagar"]        = dec.get("23. Total a pagar ($ COP)", dec.get("23. TOTAL A PAGAR ($ COP)"))
-        dec["estado_pago"]          = dec.get("Estado Pago", "").fillna("").astype(str).str.replace("✓ ", "", regex=False).str.replace("✓", "", regex=False).str.strip()
+        dec["estado_pago"]          = dec.get("Estado Pago", pd.Series([""] * len(dec))).fillna("").astype(str).str.replace("✓ ", "", regex=False).str.replace("✓", "", regex=False).str.strip()
         dec["estado_cxc"]           = ""
 
-        periodo = dec.get("1. Periodo declarado", "").fillna("")
-        ano     = dec.get("1.1 Año", 0).fillna(0)
-        dec["descripcion"] = "RETENCION ICA " + periodo.astype(str) + " " + ano.astype(int).astype(str) + " Radicado No. " + dec["consecutivo_cxc"]
+        periodo = dec.get("1. Periodo declarado", pd.Series([""] * len(dec))).fillna("")
+        ano     = dec.get("1.1 Año", pd.Series([0] * len(dec))).fillna(0)
+        dec["descripcion"] = "RETENCION ICA " + periodo.astype(str) + " " + ano.astype(float).astype(int).astype(str) + " Radicado No. " + dec["consecutivo_cxc"]
 
         enc_cols = ["consecutivo_cxc", "consecutivo_original", "numero_documento",
                     "razon_social", "fecha_cobro", "fecha_vencimiento",

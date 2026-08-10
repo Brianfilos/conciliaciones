@@ -100,7 +100,7 @@ class EncabezadoCXC(models.Model):
 class DetalleCXC(models.Model):
     encabezado = models.ForeignKey(EncabezadoCXC, on_delete=models.CASCADE, related_name="detalles")
     codigo_concepto = models.CharField(max_length=20)
-    centro_costo = models.CharField(max_length=20, blank=True)
+    centro_costo = models.CharField(max_length=120, blank=True)
     cantidad = models.IntegerField(default=1)
     valor_unitario = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
     valor_total = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)

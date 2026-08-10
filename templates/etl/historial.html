@@ -1,53 +1,264 @@
 {% extends "base.html" %}
-{% block title %}Historial{% endblock %}
+{% block title %}Historial de ejecuciones{% endblock %}
 {% block breadcrumb %} &rsaquo; <span>Historial</span>{% endblock %}
+{% block tab_reporteria %}active {% endblock %}
+
+{% block extra_css %}
+<style>
+  .hist-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 1.25rem;
+    animation: slide-up var(--t-slow) var(--ease-out) both;
+  }
+  .hist-title {
+    font-size: 1.15rem;
+    font-weight: 800;
+    letter-spacing: -0.015em;
+    color: var(--text-primary);
+  }
+
+  /* Table container */
+  .hist-table-wrap {
+    background: var(--surface-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    animation: slide-up var(--t-slow) 0.08s var(--ease-out) both;
+  }
+
+  /* Table */
+  .hist-table { width: 100%; border-collapse: collapse; }
+
+  .hist-table thead th {
+    background: var(--color-primario);
+    color: rgba(255,255,255,0.88);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    padding: 0.75rem 1rem;
+    border: none;
+    white-space: nowrap;
+  }
+  .hist-table thead th:first-child { padding-left: 1.25rem; }
+  .hist-table thead th:last-child  { padding-right: 1.25rem; text-align: center; }
+
+  .hist-table tbody tr {
+    border-bottom: 1px solid var(--border-subtle);
+    transition: background var(--t-fast);
+  }
+  .hist-table tbody tr:last-child { border-bottom: none; }
+  .hist-table tbody tr:hover { background: #f8faff; }
+
+  .hist-table tbody td {
+    font-size: 0.82rem;
+    padding: 0.65rem 1rem;
+    vertical-align: middle;
+    color: var(--text-primary);
+  }
+  .hist-table tbody td:first-child { padding-left: 1.25rem; }
+  .hist-table tbody td:last-child  { padding-right: 1.25rem; text-align: center; }
+
+  /* Date cell */
+  .cell-date {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Municipio + proceso */
+  .cell-muni { font-weight: 600; font-size: 0.83rem; }
+  .cell-proceso { font-size: 0.8rem; color: var(--text-secondary); }
+
+  /* Usuario */
+  .cell-user {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+  .cell-user-avatar {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--border-default);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: var(--color-primario);
+    flex-shrink: 0;
+  }
+
+  /* Number cells */
+  .cell-num {
+    font-variant-numeric: tabular-nums;
+    font-size: 0.8rem;
+    text-align: right;
+    padding-right: 1.25rem !important;
+    color: var(--text-secondary);
+  }
+
+  /* Badge */
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    font-size: 0.68rem; font-weight: 700;
+    letter-spacing: 0.05em; text-transform: uppercase;
+    padding: 0.28em 0.65em; border-radius: 99px;
+  }
+  .status-badge::before {
+    content: "";
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+  .status-completado { background: #dcfce7; color: #15803d; }
+  .status-completado::before { background: #22c55e; }
+  .status-error      { background: #fee2e2; color: #b91c1c; }
+  .status-error::before { background: #ef4444; }
+  .status-pendiente  { background: #f1f5f9; color: #475569; }
+  .status-pendiente::before { background: #94a3b8; }
+  .status-ejecutando { background: #fef9c3; color: #a16207; }
+  .status-ejecutando::before { background: #eab308; animation: pulse-dot 1.4s ease-in-out infinite; }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.4; }
+  }
+
+  /* Ver button */
+  .btn-ver {
+    font-size: 0.72rem; font-weight: 600;
+    padding: 0.28rem 0.65rem;
+    border-radius: var(--r-xs);
+    border: 1px solid var(--border-default);
+    color: var(--color-primario);
+    background: var(--surface-card);
+    text-decoration: none;
+    transition: background var(--t-fast), color var(--t-fast);
+    white-space: nowrap;
+  }
+  .btn-ver:hover { background: var(--color-primario); color: #fff; border-color: var(--color-primario); }
+
+  /* Empty row */
+  .row-empty td {
+    text-align: center;
+    padding: 3.5rem 1rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+
+  /* Pagination area */
+  .hist-footer {
+    padding: 0.75rem 1.25rem;
+    border-top: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+    border-radius: 0 0 var(--r-lg) var(--r-lg);
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<h5 class="fw-bold mb-3">Historial de ejecuciones</h5>
-<div class="card shadow-sm">
+
+<div class="hist-header">
+  <h1 class="hist-title">Historial de ejecuciones</h1>
+  <span class="section-label">Registro de actividad</span>
+</div>
+
+<div class="hist-table-wrap">
   <div class="table-responsive">
-    <table class="table table-sm table-hover mb-0">
-      <thead class="table-dark">
+    <table class="hist-table">
+      <thead>
         <tr>
-          <th>Fecha</th><th>Municipio</th><th>Proceso</th><th>Usuario</th>
-          <th>Estado</th><th class="text-end">Nuevos</th><th class="text-end">Duplicados</th><th></th>
+          <th>Fecha</th>
+          <th>Municipio</th>
+          <th>Proceso</th>
+          <th>Usuario</th>
+          <th>Estado</th>
+          <th style="text-align:right;padding-right:1.25rem;">Nuevos</th>
+          <th style="text-align:right;padding-right:1.25rem;">Duplicados</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
         {% for ej in page_obj %}
         <tr>
-          <td class="small">{{ ej.fecha_inicio|date:"d/m/Y H:i" }}</td>
-          <td class="small">{{ ej.proceso.municipio.nombre }}</td>
-          <td class="small">{{ ej.proceso.nombre }}</td>
-          <td class="small">{{ ej.usuario.username }}</td>
           <td>
-            <span class="badge {% if ej.estado == 'COMPLETADO' %}bg-success{% elif ej.estado == 'ERROR' %}bg-danger{% else %}bg-secondary{% endif %}">
-              {{ ej.estado }}
+            <span class="cell-date">{{ ej.fecha_inicio|date:"d/m/Y" }}</span>
+            <br>
+            <span style="font-size:.72rem;color:var(--text-muted);">{{ ej.fecha_inicio|date:"H:i" }}</span>
+          </td>
+          <td><span class="cell-muni">{{ ej.proceso.municipio.nombre }}</span></td>
+          <td><span class="cell-proceso">{{ ej.proceso.nombre }}</span></td>
+          <td>
+            <span class="cell-user">
+              <span class="cell-user-avatar">{{ ej.usuario.username|first|upper }}</span>
+              {{ ej.usuario.username }}
             </span>
           </td>
-          <td class="text-end small">{{ ej.registros_nuevos }}</td>
-          <td class="text-end small">{{ ej.registros_duplicados }}</td>
           <td>
-            <a href="{% url 'dashboard' ej.proceso.id %}" class="btn btn-xs btn-outline-primary btn-sm py-0 px-2">Ver</a>
+            {% if ej.estado == 'COMPLETADO' %}
+              <span class="status-badge status-completado">Completado</span>
+            {% elif ej.estado == 'ERROR' %}
+              <span class="status-badge status-error">Error</span>
+            {% elif ej.estado == 'EJECUTANDO' %}
+              <span class="status-badge status-ejecutando">Ejecutando</span>
+            {% else %}
+              <span class="status-badge status-pendiente">{{ ej.estado }}</span>
+            {% endif %}
+          </td>
+          <td class="cell-num">{{ ej.registros_nuevos }}</td>
+          <td class="cell-num">{{ ej.registros_duplicados }}</td>
+          <td>
+            <a href="{% url 'dashboard' ej.proceso.id %}" class="btn-ver">Ver datos</a>
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="8" class="text-center text-muted py-4">Sin ejecuciones registradas.</td></tr>
+        <tr class="row-empty">
+          <td colspan="8">
+            <div style="margin-bottom:.5rem;font-size:1.4rem;opacity:.3;">
+              <i class="bi bi-clock-history"></i>
+            </div>
+            Sin ejecuciones registradas
+          </td>
+        </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
+
+  {% if page_obj.has_other_pages %}
+  <div class="hist-footer">
+    <span style="font-size:.78rem;color:var(--text-muted);">
+      Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+    </span>
+    <nav>
+      <ul class="pagination mb-0">
+        {% if page_obj.has_previous %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ page_obj.previous_page_number }}">&lsaquo;</a>
+        </li>
+        {% endif %}
+        <li class="page-item disabled">
+          <span class="page-link" style="min-width:4rem;text-align:center;">
+            {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}
+          </span>
+        </li>
+        {% if page_obj.has_next %}
+        <li class="page-item">
+          <a class="page-link" href="?page={{ page_obj.next_page_number }}">&rsaquo;</a>
+        </li>
+        {% endif %}
+      </ul>
+    </nav>
+  </div>
+  {% endif %}
 </div>
-{% if page_obj.has_other_pages %}
-<nav class="mt-3">
-  <ul class="pagination pagination-sm justify-content-center mb-0">
-    {% if page_obj.has_previous %}
-    <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}">&laquo;</a></li>
-    {% endif %}
-    <li class="page-item disabled"><span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
-    {% if page_obj.has_next %}
-    <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}">&raquo;</a></li>
-    {% endif %}
-  </ul>
-</nav>
-{% endif %}
+
 {% endblock %}

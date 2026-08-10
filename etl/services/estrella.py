@@ -222,13 +222,12 @@ class ProcesadorEstrella(ProcesadorBase):
 
         df_det = pd.concat([ag] + extras, ignore_index=True)
 
-        # ── Ajuste de redondeo ────────────────────────────────────────────────
+        # ── Ajuste de cierre ─────────────────────────────────────────────────
         # Se suma cada concepto aplicando su signo.
         # diff = suma_con_signos - total_40
-        # |diff| < 500 → quitar la diferencia del concepto positivo de mayor valor.
-        # |diff| >= 500 → aproximar total_40 al siguiente múltiplo de 1000.
-        import math as _math
-
+        # El total declarado (total_40) es el valor real y nunca se aproxima;
+        # el residuo se descuenta del concepto positivo de mayor valor para que
+        # sum(conceptos) cierre exactamente contra total_40.
         if tc and "consecutivo_cxc" in df_det.columns:
             for idx, enc_row in df_enc.iterrows():
                 consec = enc_row.get("consecutivo_cxc", "")
@@ -249,27 +248,17 @@ class ProcesadorEstrella(ProcesadorBase):
                 if abs(diff) == 0:
                     continue
 
-                if abs(diff) < 500:
-                    # Buscar el concepto positivo que al ajustarse quede en múltiplo de 1000.
-                    # Si ninguno queda exacto, elegir el que quede más cercano.
-                    pos_sub = sub[sub["codigo_concepto"].apply(
-                        lambda c: _SIGNO_DEC.get(str(c).strip(), +1) > 0
-                    )].copy()
-                    if pos_sub.empty:
-                        continue
-                    pos_sub["_v"] = pos_sub["valor_total"].apply(
-                        lambda x: pd.to_numeric(x, errors="coerce") or 0)
-                    pos_sub["_new"] = pos_sub["_v"] - diff
-                    pos_sub["_rem"] = pos_sub["_new"].apply(
-                        lambda v: min(v % 1000, 1000 - v % 1000))
-                    best_idx = pos_sub["_rem"].idxmin()
-                    new_val = round(float(pos_sub.at[best_idx, "_new"]), 2)
-                    df_det.at[best_idx, "valor_unitario"] = new_val
-                    df_det.at[best_idx, "valor_total"] = new_val
-                else:
-                    # Aproximar total al siguiente múltiplo de 1000
-                    new_total = _math.ceil(total_40 / 1000) * 1000
-                    df_enc.at[idx, "total_a_pagar"] = new_total
+                pos_sub = sub[sub["codigo_concepto"].apply(
+                    lambda c: _SIGNO_DEC.get(str(c).strip(), +1) > 0
+                )].copy()
+                if pos_sub.empty:
+                    continue
+                pos_sub["_v"] = pos_sub["valor_total"].apply(
+                    lambda x: pd.to_numeric(x, errors="coerce") or 0)
+                best_idx = pos_sub["_v"].idxmax()
+                new_val = round(float(pos_sub.at[best_idx, "_v"]) - diff, 2)
+                df_det.at[best_idx, "valor_unitario"] = new_val
+                df_det.at[best_idx, "valor_total"] = new_val
 
         return df_enc, df_det
 

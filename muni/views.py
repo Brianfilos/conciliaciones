@@ -8,6 +8,7 @@ from django.http import HttpResponse, Http404
 from django.conf import settings
 from django.contrib import messages
 import pandas as pd
+from django.db import models as models
 from .models import Municipio, CIIUMunicipio, ConceptoMunicipio
 
 
@@ -91,13 +92,46 @@ class CargarCIIUView(View):
         if not request.user.is_admin:
             return redirect("municipio_home")
         municipio = get_object_or_404(Municipio, codigo=codigo)
-        count = CIIUMunicipio.objects.filter(municipio=municipio).count()
-        return render(request, "municipios/cargar_ciiu.html", {"municipio": municipio, "count": count})
+        q = request.GET.get("q", "").strip()
+        qs = CIIUMunicipio.objects.filter(municipio=municipio).order_by("codigo")
+        if q:
+            qs = qs.filter(models.Q(codigo__icontains=q) | models.Q(descripcion__icontains=q))
+        from django.core.paginator import Paginator
+        paginator = Paginator(qs, 50)
+        page = paginator.get_page(request.GET.get("page", 1))
+        return render(request, "municipios/cargar_ciiu.html", {
+            "municipio": municipio,
+            "count": CIIUMunicipio.objects.filter(municipio=municipio).count(),
+            "page_obj": page,
+            "q": q,
+        })
 
     def post(self, request, codigo):
         if not request.user.is_admin:
             return redirect("municipio_home")
         municipio = get_object_or_404(Municipio, codigo=codigo)
+        action = request.POST.get("action", "importar")
+
+        if action == "eliminar":
+            ciiu_id = request.POST.get("ciiu_id")
+            CIIUMunicipio.objects.filter(id=ciiu_id, municipio=municipio).delete()
+            messages.success(request, "Registro eliminado.")
+            return redirect(f"{request.path}?q={request.POST.get('q','')}&page={request.POST.get('page',1)}")
+
+        if action == "editar":
+            ciiu_id = request.POST.get("ciiu_id")
+            obj = get_object_or_404(CIIUMunicipio, id=ciiu_id, municipio=municipio)
+            obj.descripcion = request.POST.get("descripcion", obj.descripcion)[:300]
+            obj.tipo = request.POST.get("tipo", obj.tipo).upper()[:15]
+            try:
+                obj.tarifa = float(request.POST.get("tarifa", obj.tarifa or 0))
+            except (ValueError, TypeError):
+                pass
+            obj.save()
+            messages.success(request, f"CIIU {obj.codigo} actualizado.")
+            return redirect(f"{request.path}?q={request.POST.get('q','')}&page={request.POST.get('page',1)}")
+
+        # importar
         archivo = request.FILES.get("archivo")
         if not archivo:
             messages.error(request, "Selecciona un archivo.")
@@ -135,13 +169,41 @@ class CargarConceptosView(View):
         if not request.user.is_admin:
             return redirect("municipio_home")
         municipio = get_object_or_404(Municipio, codigo=codigo)
-        count = ConceptoMunicipio.objects.filter(municipio=municipio).count()
-        return render(request, "municipios/cargar_conceptos.html", {"municipio": municipio, "count": count})
+        q = request.GET.get("q", "").strip()
+        qs = ConceptoMunicipio.objects.filter(municipio=municipio).order_by("codigo")
+        if q:
+            qs = qs.filter(models.Q(codigo__icontains=q) | models.Q(descripcion__icontains=q))
+        from django.core.paginator import Paginator
+        paginator = Paginator(qs, 50)
+        page = paginator.get_page(request.GET.get("page", 1))
+        return render(request, "municipios/cargar_conceptos.html", {
+            "municipio": municipio,
+            "count": ConceptoMunicipio.objects.filter(municipio=municipio).count(),
+            "page_obj": page,
+            "q": q,
+        })
 
     def post(self, request, codigo):
         if not request.user.is_admin:
             return redirect("municipio_home")
         municipio = get_object_or_404(Municipio, codigo=codigo)
+        action = request.POST.get("action", "importar")
+
+        if action == "eliminar":
+            concepto_id = request.POST.get("concepto_id")
+            ConceptoMunicipio.objects.filter(id=concepto_id, municipio=municipio).delete()
+            messages.success(request, "Concepto eliminado.")
+            return redirect(f"{request.path}?q={request.POST.get('q','')}&page={request.POST.get('page',1)}")
+
+        if action == "editar":
+            concepto_id = request.POST.get("concepto_id")
+            obj = get_object_or_404(ConceptoMunicipio, id=concepto_id, municipio=municipio)
+            obj.descripcion = request.POST.get("descripcion", obj.descripcion)[:200]
+            obj.tipo_proceso = request.POST.get("tipo_proceso", obj.tipo_proceso)[:30]
+            obj.save()
+            messages.success(request, f"Concepto {obj.codigo} actualizado.")
+            return redirect(f"{request.path}?q={request.POST.get('q','')}&page={request.POST.get('page',1)}")
+
         archivo = request.FILES.get("archivo")
         if not archivo:
             messages.error(request, "Selecciona un archivo.")

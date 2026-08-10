@@ -1,5 +1,6 @@
-# Entorno virtual
+# Entornos virtuales
 venv/
+venv_mac/
 env/
 .venv/
 
@@ -29,6 +30,9 @@ GOBS/
 SESION_*.txt
 chat.txt
 _*.py
+
+# Backups locales
+backups/
 
 # Claude Code
 .claude/

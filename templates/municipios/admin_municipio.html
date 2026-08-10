@@ -93,13 +93,14 @@
                 </td>
                 <td class="text-end">
                   {% if proceso.encabezados.count > 0 %}
-                  <form method="post" action="{% url 'limpiar_proceso' proceso.id %}" class="d-inline"
-                        onsubmit="return confirm('¿Borrar TODOS los datos de «{{ proceso.nombre }}»? No se puede deshacer.');">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-outline-danger btn-sm">
-                      <i class="bi bi-trash"></i> Limpiar
-                    </button>
-                  </form>
+                  <button type="button" class="btn btn-outline-danger btn-sm"
+                          data-bs-toggle="modal"
+                          data-bs-target="#modalLimpiar"
+                          data-proceso-id="{{ proceso.id }}"
+                          data-proceso-nombre="{{ proceso.nombre }}"
+                          data-action="{% url 'limpiar_proceso' proceso.id %}">
+                    <i class="bi bi-trash"></i> Limpiar
+                  </button>
                   {% else %}
                   <span class="text-muted small">Sin datos</span>
                   {% endif %}
@@ -119,4 +120,39 @@
 </div>
 {% endwith %}
 {% endfor %}
+
+{# ── Modal confirmación limpiar ── #}
+<div class="modal fade" id="modalLimpiar" tabindex="-1" aria-labelledby="modalLimpiarLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title" id="modalLimpiarLabel"><i class="bi bi-exclamation-triangle me-2"></i>Confirmar limpieza</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        ¿Borrar <strong>TODOS</strong> los datos del proceso <strong id="modalProcNombre"></strong>?
+        <div class="alert alert-warning mt-3 mb-0 small py-2">
+          <i class="bi bi-exclamation-circle me-1"></i>Esta acción <strong>no se puede deshacer</strong>.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <form id="formLimpiar" method="post" action="" class="d-inline">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger">
+            <i class="bi bi-trash me-1"></i>Sí, limpiar
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.getElementById('modalLimpiar').addEventListener('show.bs.modal', function(e) {
+  var btn = e.relatedTarget;
+  document.getElementById('modalProcNombre').textContent = '«' + btn.dataset.procesoNombre + '»';
+  document.getElementById('formLimpiar').action = btn.dataset.action;
+});
+</script>
 {% endblock %}

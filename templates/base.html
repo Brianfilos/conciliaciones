@@ -9,25 +9,27 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Barlow+Condensed:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Barlow+Condensed:wght@400;500;600;700;800&display=swap">
   <link rel="stylesheet" href="{% static 'css/main.css' %}">
   <style>
     :root {
-      --color-primario: {{ color_primario|default:"#1B3A6B" }};
-      --color-secundario: {{ color_secundario|default:"#2d6a9f" }};
+      --color-primario:     {{ color_primario|default:"#1B3A6B" }};
+      --color-secundario:   {{ color_secundario|default:"#2d6a9f" }};
       --color-texto-header: {{ color_texto_header|default:"#ffffff" }};
     }
-    body { font-family: {{ fuente_principal|default:"Montserrat, sans-serif" }}; }
+    body { font-family: {{ fuente_principal|default:"'Outfit', sans-serif" }}; }
   </style>
   {% block extra_css %}{% endblock %}
 </head>
 <body class="bg-light">
 
-<!-- HEADER -->
-<header class="app-header d-flex align-items-center px-3 py-2">
-  <div class="d-flex align-items-center me-3">
+<!-- ══ HEADER ═════════════════════════════════════════════════════ -->
+<header class="app-header d-flex align-items-center px-3 gap-2">
+
+  <!-- Logo + rol + breadcrumb -->
+  <div class="d-flex align-items-center gap-2 me-auto">
     {% if logo_url %}
-      <img src="{{ logo_url }}" alt="Logo" class="header-logo me-2">
+      <img src="{{ logo_url }}" alt="Logo" class="header-logo">
     {% endif %}
     <div>
       <div class="header-rol">{{ request.user.get_rol_display|upper }}</div>
@@ -38,51 +40,70 @@
     </div>
   </div>
 
-  <div class="ms-auto d-flex align-items-center gap-3">
-    {% if request.user.is_admin %}
-    <div class="header-nav-tabs">
-      <a href="{% url 'admin_municipio' %}" class="header-nav-tab {% block tab_admin %}{% endblock %}">Admin</a>
-      <a href="{% url 'historial' %}" class="header-nav-tab {% block tab_reporteria %}{% endblock %}">Reportería</a>
-      <a href="{% url 'proceso_list' %}" class="header-nav-tab {% block tab_analitica %}{% endblock %}active">Analítica</a>
+  <!-- Nav tabs (admin only) -->
+  {% if request.user.is_admin %}
+  <nav class="header-nav-tabs">
+    <a href="{% url 'admin_municipio' %}"
+       class="header-nav-tab {% block tab_admin %}{% endblock %}">
+      <i class="bi bi-sliders me-1" style="font-size:.7rem;"></i>Admin
+    </a>
+    <a href="{% url 'historial' %}"
+       class="header-nav-tab {% block tab_reporteria %}{% endblock %}">
+      <i class="bi bi-clock-history me-1" style="font-size:.7rem;"></i>Reportería
+    </a>
+    <a href="{% url 'proceso_list' %}"
+       class="header-nav-tab {% block tab_analitica %}{% endblock %}active">
+      <i class="bi bi-bar-chart-line me-1" style="font-size:.7rem;"></i>Analítica
+    </a>
+  </nav>
+  {% endif %}
+
+  <!-- User dropdown -->
+  <div class="dropdown">
+    <div class="user-avatar"
+         role="button"
+         data-bs-toggle="dropdown"
+         aria-expanded="false"
+         title="{{ request.user.get_full_name|default:request.user.username }}">
+      {{ request.user.username|first|upper }}
     </div>
-    {% endif %}
-    <div class="dropdown">
-      <div class="user-avatar" role="button" data-bs-toggle="dropdown" aria-expanded="false"
-           style="cursor:pointer;" title="{{ request.user.username }}">
-        {{ request.user.username|first|upper }}
-      </div>
-      <ul class="dropdown-menu dropdown-menu-end shadow border-0" style="min-width:200px;border-radius:.7rem;">
-        <li class="px-3 pt-2 pb-1">
-          <div class="fw-bold small" style="color:#1a1a2e;">{{ request.user.get_full_name|default:request.user.username }}</div>
-          <div class="text-muted" style="font-size:.75rem;">{{ request.user.get_rol_display }}</div>
-        </li>
-        <li><hr class="dropdown-divider my-1"></li>
-        <li>
-          <form method="post" action="{% url 'logout' %}" class="m-0">
-            {% csrf_token %}
-            <button type="submit" class="dropdown-item text-danger d-flex align-items-center gap-2">
-              <i class="bi bi-box-arrow-right"></i> Cerrar sesión
-            </button>
-          </form>
-        </li>
-      </ul>
-    </div>
+    <ul class="dropdown-menu dropdown-menu-end">
+      <li class="px-3 pt-2 pb-1">
+        <div class="fw-bold" style="font-size:.85rem;color:var(--text-primary);">
+          {{ request.user.get_full_name|default:request.user.username }}
+        </div>
+        <div style="font-size:.73rem;color:var(--text-muted);margin-top:1px;">
+          {{ request.user.get_rol_display }}
+        </div>
+      </li>
+      <li><hr class="dropdown-divider my-1" style="border-color:var(--border-subtle);"></li>
+      <li>
+        <form method="post" action="{% url 'logout' %}" class="m-0">
+          {% csrf_token %}
+          <button type="submit"
+                  class="dropdown-item text-danger d-flex align-items-center gap-2">
+            <i class="bi bi-box-arrow-right" style="font-size:.9rem;"></i>
+            Cerrar sesión
+          </button>
+        </form>
+      </li>
+    </ul>
   </div>
 </header>
 
-<!-- MESSAGES -->
+<!-- ══ ALERTS ═════════════════════════════════════════════════════ -->
 {% if messages %}
 <div class="container-fluid px-3 mt-2">
   {% for msg in messages %}
-  <div class="alert alert-{{ msg.tags|default:'info' }} alert-dismissible fade show py-2 mb-1" role="alert">
+  <div class="alert alert-{{ msg.tags|default:'info' }} alert-dismissible fade show py-2 mb-1 animate-fade" role="alert">
     {{ msg }}
-    <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert"></button>
+    <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert" aria-label="Cerrar"></button>
   </div>
   {% endfor %}
 </div>
 {% endif %}
 
-<!-- CONTENT -->
+<!-- ══ CONTENT ════════════════════════════════════════════════════ -->
 <main class="container-fluid px-3 py-3">
   {% block content %}{% endblock %}
 </main>

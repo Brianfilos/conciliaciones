@@ -1,0 +1,38 @@
+# Servicio systemd para la app de conciliaciones
+# Copiar a: /etc/systemd/system/conciliaciones.service
+#
+# Luego ejecutar:
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable conciliaciones
+#   sudo systemctl start conciliaciones
+
+[Unit]
+Description=App Conciliaciones - Gunicorn
+After=network.target mysql.service
+
+[Service]
+Type=notify
+
+# Cambiar por el usuario real del VPS
+User=ubuntu
+Group=ubuntu
+
+# Ruta donde se clonó el repositorio
+WorkingDirectory=/home/ubuntu/app-conciliaciones
+
+# Ruta al gunicorn del virtualenv
+ExecStart=/home/ubuntu/app-conciliaciones/venv/bin/gunicorn \
+          --config deploy/gunicorn.conf.py \
+          core.wsgi:application
+
+ExecReload=/bin/kill -s HUP $MAINPID
+KillMode=mixed
+TimeoutStopSec=5
+PrivateTmp=true
+
+# Reiniciar automáticamente si cae
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

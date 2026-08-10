@@ -1,6 +1,7 @@
 import io
 import csv
 import threading
+from urllib.parse import urlencode
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.utils.decorators import method_decorator
@@ -48,11 +49,7 @@ def _run_motor(ejecucion_id, archivos):
 @method_decorator(login_required, name="dispatch")
 class ProcesoListView(View):
     def get(self, request):
-        municipio = request.user.municipio
-        if not municipio:
-            return redirect("municipio_home")
-        procesos = Proceso.objects.filter(municipio=municipio, activo=True)
-        return render(request, "etl/proceso_list.html", {"procesos": procesos, "municipio": municipio})
+        return redirect("municipio_home")
 
 
 @method_decorator(login_required, name="dispatch")
@@ -123,7 +120,7 @@ class LimpiarProcesoView(View):
             request,
             f"Datos limpiados: {enc_count} encabezados y {eje_count} ejecuciones eliminados del proceso «{proceso.nombre}»."
         )
-        return redirect("ejecutar_proceso", proceso_id=proceso_id)
+        return redirect("admin_municipio")
 
 
 @method_decorator(login_required, name="dispatch")
@@ -407,7 +404,7 @@ class DashboardView(View):
             OCC_SAN   = {"OCC-04","OCC-05","OCC-06","OCC-07","OCC-08","OCC-09","OCC-10"}
             OCC_INT   = {"OCC-23"}
             OCC_BOM   = {"OCC-051"}
-            OCC_AVI   = {"OCC-69"}
+            OCC_AVI   = {"69"}
             from etl.models import DetalleCXC as _Det
             det_qs = _Det.objects.filter(
                 encabezado__in=[obj.pk for obj in page_obj.object_list]
@@ -467,20 +464,39 @@ class DashboardView(View):
             "q_consec": q_consec, "q_num": q_num, "q_nombre": q_nombre,
             "q_desc": q_desc, "q_concepto": q_concepto, "q_centro": q_centro,
             "q_valor_unit": q_valor_unit, "q_valor_tot": q_valor_tot, "q_total_pagar": q_total_pagar,
-            "export_filter_qs": "&".join(f"{k}={v}" for k, v in [
-                ("q", q), ("q_consec", q_consec), ("q_num", q_num), ("q_nombre", q_nombre),
-                ("q_desc", q_desc), ("q_concepto", q_concepto), ("q_centro", q_centro),
-                ("q_valor_unit", q_valor_unit), ("q_valor_tot", q_valor_tot), ("q_total_pagar", q_total_pagar),
-                ("tipo_doc", tipo_doc_filtro), ("estado_pago", estado_pago_filtro), ("estado", estado_filtro),
-                ("fecha_desde", fecha_desde.isoformat() if fecha_desde else ""),
-                ("fecha_hasta", fecha_hasta.isoformat() if fecha_hasta else ""),
-                ("caldas_tipo_persona", caldas_tipo_persona_filtro), ("caldas_periodo", caldas_periodo_filtro),
-                ("caldas_ano", caldas_ano_filtro), ("caldas_clasi", caldas_clasi_filtro),
-                ("env_fecha_pago_desde", env_fecha_pago_desde.isoformat() if env_fecha_pago_desde else ""),
-                ("env_fecha_pago_hasta", env_fecha_pago_hasta.isoformat() if env_fecha_pago_hasta else ""),
-                ("env_fecha_pres_desde", env_fecha_pres_desde.isoformat() if env_fecha_pres_desde else ""),
-                ("env_fecha_pres_hasta", env_fecha_pres_hasta.isoformat() if env_fecha_pres_hasta else ""),
-            ] if v),
+            "export_filter_qs": urlencode([
+                (k, v) for k, v in [
+                    ("q", q), ("q_consec", q_consec), ("q_num", q_num), ("q_nombre", q_nombre),
+                    ("q_desc", q_desc), ("q_concepto", q_concepto), ("q_centro", q_centro),
+                    ("q_valor_unit", q_valor_unit), ("q_valor_tot", q_valor_tot), ("q_total_pagar", q_total_pagar),
+                    ("tipo_doc", tipo_doc_filtro), ("estado_pago", estado_pago_filtro), ("estado", estado_filtro),
+                    ("fecha_desde", fecha_desde.isoformat() if fecha_desde else ""),
+                    ("fecha_hasta", fecha_hasta.isoformat() if fecha_hasta else ""),
+                    ("caldas_tipo_persona", caldas_tipo_persona_filtro), ("caldas_periodo", caldas_periodo_filtro),
+                    ("caldas_ano", caldas_ano_filtro), ("caldas_clasi", caldas_clasi_filtro),
+                    ("env_fecha_pago_desde", env_fecha_pago_desde.isoformat() if env_fecha_pago_desde else ""),
+                    ("env_fecha_pago_hasta", env_fecha_pago_hasta.isoformat() if env_fecha_pago_hasta else ""),
+                    ("env_fecha_pres_desde", env_fecha_pres_desde.isoformat() if env_fecha_pres_desde else ""),
+                    ("env_fecha_pres_hasta", env_fecha_pres_hasta.isoformat() if env_fecha_pres_hasta else ""),
+                ] if v
+            ]),
+            "pagination_qs": urlencode([
+                (k, v) for k, v in [
+                    ("tab", tab), ("per_page", str(per_page)),
+                    ("q", q), ("q_consec", q_consec), ("q_num", q_num), ("q_nombre", q_nombre),
+                    ("q_desc", q_desc), ("q_concepto", q_concepto), ("q_centro", q_centro),
+                    ("q_valor_unit", q_valor_unit), ("q_valor_tot", q_valor_tot), ("q_total_pagar", q_total_pagar),
+                    ("tipo_doc", tipo_doc_filtro), ("estado_pago", estado_pago_filtro), ("estado", estado_filtro),
+                    ("fecha_desde", fecha_desde.isoformat() if fecha_desde else ""),
+                    ("fecha_hasta", fecha_hasta.isoformat() if fecha_hasta else ""),
+                    ("caldas_tipo_persona", caldas_tipo_persona_filtro), ("caldas_periodo", caldas_periodo_filtro),
+                    ("caldas_ano", caldas_ano_filtro), ("caldas_clasi", caldas_clasi_filtro),
+                    ("env_fecha_pago_desde", env_fecha_pago_desde.isoformat() if env_fecha_pago_desde else ""),
+                    ("env_fecha_pago_hasta", env_fecha_pago_hasta.isoformat() if env_fecha_pago_hasta else ""),
+                    ("env_fecha_pres_desde", env_fecha_pres_desde.isoformat() if env_fecha_pres_desde else ""),
+                    ("env_fecha_pres_hasta", env_fecha_pres_hasta.isoformat() if env_fecha_pres_hasta else ""),
+                ] if v
+            ]),
             "tipo_doc_filtro": tipo_doc_filtro,
             "estado_pago_filtro": estado_pago_filtro,
             "fecha_desde": fecha_desde.isoformat() if fecha_desde else "",
@@ -546,8 +562,15 @@ class ExportarView(View):
         # ── Caldas: formato SAIMYR ────────────────────────────────────────────
         if proceso.municipio.codigo == "CALDAS":
             from etl.services.exportador_caldas import build_rows, build_dec_rows, HEADERS
-            filtros = {"q": q, "fecha_desde": fecha_desde,
-                       "fecha_hasta": fecha_hasta, "estado": estado_filtro}
+            filtros = {
+                "q": q, "fecha_desde": fecha_desde, "fecha_hasta": fecha_hasta,
+                "estado": estado_filtro, "estado_pago": estado_pago_filtro,
+                "q_consec": q_consec, "q_num": q_num, "q_nombre": q_nombre,
+                "caldas_tipo_persona": caldas_tipo_persona_filtro,
+                "caldas_periodo": caldas_periodo_filtro,
+                "caldas_ano": caldas_ano_filtro,
+                "caldas_clasi": caldas_clasi_filtro,
+            }
             if tab == "encabezado":
                 headers, data = build_dec_rows(proceso, filtros)
             else:
@@ -566,6 +589,12 @@ class ExportarView(View):
                     cell.alignment = Alignment(horizontal="center")
                 for row in data:
                     ws.append(["" if v is None else v for v in row])
+                # Formato numérico 0.00 (sin símbolo moneda) en columna valor_pagado
+                if "valor_pagado" in headers:
+                    vcol = headers.index("valor_pagado") + 1
+                    for row_cells in ws.iter_rows(min_row=2, min_col=vcol, max_col=vcol):
+                        for cell in row_cells:
+                            cell.number_format = "0.00"
                 buf = io.BytesIO()
                 wb.save(buf)
                 buf.seek(0)
@@ -642,15 +671,19 @@ class ExportarView(View):
 
             # Mapa codigo_concepto -> descripcion para Envigado
             DESC_ENVIGADO = {
-                "8575": "AUTORRETENCIÓN INDUSTRIA Y COMERCIO - INDUSTRIAL",
-                "8576": "AUTORRETENCIÓN INDUSTRIA Y COMERCIO - COMERCIAL",
+                "8575": "AUTORRETENCION INDUSTRIA Y COMERCIO - INDUSTRIAL",
+                "8576": "AUTORRETENCION INDUSTRIA Y COMERCIO - COMERCIAL",
                 "8577": "AUTORRETENCION INDUSTRIA Y COMERCIO - SERVICIOS",
                 "8578": "SANCIONES",
                 "8579": "INTERESES",
-                "7377": "Retención por industria y comercio",
-                "7378": "Sanción RETEICA",
+                "7377": "Retencion por industria y comercio",
+                "7378": "Sancion RETEICA",
                 "7379": "interes de mora por RETEICA",
             }
+
+            import unicodedata as _ud
+            def _sin_tildes(s):
+                return _ud.normalize("NFD", str(s)).encode("ascii", "ignore").decode()
 
             is_rete = proceso.codigo == "CXC_RETE"
             lines = []
@@ -669,16 +702,45 @@ class ExportarView(View):
                     return int(d.valor_total) if d.valor_total is not None else 0
 
                 if is_rete:
-                    total = ex.get("total", enc.total_a_pagar or "")
-                    lines.append(f"{cxc}|{nit}|{nom}|{ano}|{per}|{total}|{ep}|{fpres}|{fpago}")
+                    total_raw = ex.get("total", enc.total_a_pagar or 0)
+                    try:
+                        total = int(float(total_raw))
+                    except (ValueError, TypeError):
+                        total = total_raw
+                    lines.append(f"{cxc}|{nit}|{per}|{ano}|{nom}|{total}|{ep}|{fpago}|{fpres}")
+                    # Agrupar valores por código y descontar exceso del 7377
+                    vals_rete = {}
+                    exceso = 0
                     for d in det_map.get(cxc, []):
-                        desc = DESC_ENVIGADO.get(d.codigo_concepto, d.codigo_concepto)
-                        lines.append(f"{cxc}|{nit}|{nom}|{desc}|{_val(d)}")
+                        cod = d.codigo_concepto or ""
+                        v   = _val(d)
+                        if not cod:  # RETENCION PRACTICADA EN EXCESO (negativo)
+                            exceso += abs(v)
+                        else:
+                            vals_rete[cod] = vals_rete.get(cod, 0) + v
+                    # Restar exceso del 7377
+                    if exceso and "7377" in vals_rete:
+                        vals_rete["7377"] = vals_rete["7377"] - exceso
+                    for cod, v in vals_rete.items():
+                        if v <= 0:
+                            continue
+                        desc = _sin_tildes(DESC_ENVIGADO.get(cod, cod))
+                        if not desc:
+                            continue
+                        lines.append(f"{cxc}|{nit}|{nom}|{cod}|{desc}|{v}")
                 else:
-                    lines.append(f"{cxc}|{nit}|{nom}|{ano}|{per}|{ep}|{fpres}|{fpago}")
+                    try:
+                        total_auto = int(float(enc.total_a_pagar)) if enc.total_a_pagar is not None else ""
+                    except (ValueError, TypeError):
+                        total_auto = enc.total_a_pagar or ""
+                    lines.append(f"{cxc}|{nit}|{per}|{ano}|{nom}|{total_auto}|{ep}|{fpago}|{fpres}")
                     for d in det_map.get(cxc, []):
-                        desc = DESC_ENVIGADO.get(d.codigo_concepto, d.codigo_concepto)
-                        lines.append(f"{cxc}|{nit}|{nom}|{d.codigo_concepto}|{desc}|{_val(d)}")
+                        v = _val(d)
+                        if not v:
+                            continue
+                        cod  = d.codigo_concepto or ""
+                        desc = _sin_tildes(DESC_ENVIGADO.get(cod, cod))
+                        lines.append(f"{cxc}|{nit}|{nom}|{cod}|{desc}|{v}")
 
             suffix = "rete" if is_rete else "auto"
             response = HttpResponse(content_type="text/plain; charset=utf-8")

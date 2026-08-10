@@ -37,6 +37,7 @@ _DESC_FIJA = {
     "OCC-051": "SOBRETASA BOMBERIL",
     "OCC-209": "MULTAS Y SANCIONES DE INDUSTRIA Y COMERCIO",  # fallback OCC-209 sin clasi
     "OCC-69":  "AVISOS Y TABLEROS",
+    "69":      "AVISOS Y TABLEROS",
 }
 
 HEADERS = [
@@ -94,7 +95,7 @@ OCC_AUT_SET  = {"OCC-209"}
 OCC_SAN_SET  = {"OCC-04","OCC-05","OCC-06","OCC-07","OCC-08","OCC-09","OCC-10"}
 OCC_INT_SET  = {"OCC-23"}
 OCC_BOM_SET  = {"OCC-051"}
-OCC_AVI_SET  = {"OCC-69"}
+OCC_AVI_SET  = {"69"}
 
 
 def _totales_ica(enc):
@@ -141,12 +142,29 @@ def build_dec_rows(proceso, filtros=None):
               qs.filter(numero_documento__icontains=q) |
               qs.filter(primer_apellido__icontains=q) |
               qs.filter(razon_social__icontains=q))
+    if filtros.get("q_consec"):
+        qs = qs.filter(consecutivo_cxc__icontains=filtros["q_consec"])
+    if filtros.get("q_num"):
+        qs = qs.filter(numero_documento__icontains=filtros["q_num"])
+    if filtros.get("q_nombre"):
+        qn = filtros["q_nombre"]
+        qs = (qs.filter(primer_apellido__icontains=qn) |
+              qs.filter(primer_nombre__icontains=qn) |
+              qs.filter(razon_social__icontains=qn))
     if filtros.get("fecha_desde"):
         qs = qs.filter(fecha_cobro__gte=filtros["fecha_desde"])
     if filtros.get("fecha_hasta"):
         qs = qs.filter(fecha_cobro__lte=filtros["fecha_hasta"])
     if filtros.get("estado"):
         qs = qs.filter(estado_cxc__iexact=filtros["estado"])
+    if filtros.get("estado_pago"):
+        qs = qs.filter(estado_pago__icontains=filtros["estado_pago"])
+    if filtros.get("caldas_tipo_persona"):
+        qs = qs.filter(datos_extra__tipo_persona=filtros["caldas_tipo_persona"])
+    if filtros.get("caldas_periodo"):
+        qs = qs.filter(datos_extra__periodo=filtros["caldas_periodo"])
+    if filtros.get("caldas_ano"):
+        qs = qs.filter(datos_extra__ano=filtros["caldas_ano"])
 
     cod = proceso.codigo.upper()
     es_ica = "DECLARE" in cod
@@ -201,16 +219,21 @@ def build_dec_rows(proceso, filtros=None):
         iyc_col   = next((c for c in act_df.columns if "IMPUESTO" in c.upper() and "IND" in c.upper()), None) or \
                     next((c for c in act_df.columns if "IMPUESTO" in c.upper()), None)
 
-        # Índice de consecutivos filtrados
-        consec_set = set(qs.values_list("consecutivo_cxc", flat=True))
+        # Mapa: consecutivo_original (número crudo del Excel) → consecutivo_cxc (prefijado)
+        orig_to_cxc = {
+            str(orig).strip(): cxc
+            for orig, cxc in qs.values_list("consecutivo_original", "consecutivo_cxc")
+            if orig
+        }
 
-        # Agrupar actividades por consecutivo
+        # Agrupar actividades por consecutivo_cxc usando el original como clave de join
         act_by_consec = {}
         if con_col:
             for _, arow in act_df.iterrows():
-                c = arow.get("_consec", "")
-                if c in consec_set:
-                    act_by_consec.setdefault(c, []).append(arow)
+                c_raw = arow.get("_consec", "")
+                cxc = orig_to_cxc.get(str(c_raw).strip())
+                if cxc:
+                    act_by_consec.setdefault(cxc, []).append(arow)
 
         # Headers ICA completos: 124 columnas del formato
         from etl.services.exportador_caldas import HEADERS_DEC_ICA as _ICA_H
@@ -376,12 +399,32 @@ def build_rows(proceso, filtros=None):
               qs.filter(numero_documento__icontains=q) |
               qs.filter(primer_apellido__icontains=q) |
               qs.filter(razon_social__icontains=q))
+    if filtros.get("q_consec"):
+        qs = qs.filter(consecutivo_cxc__icontains=filtros["q_consec"])
+    if filtros.get("q_num"):
+        qs = qs.filter(numero_documento__icontains=filtros["q_num"])
+    if filtros.get("q_nombre"):
+        qn = filtros["q_nombre"]
+        qs = (qs.filter(primer_apellido__icontains=qn) |
+              qs.filter(primer_nombre__icontains=qn) |
+              qs.filter(razon_social__icontains=qn))
     if filtros.get("fecha_desde"):
         qs = qs.filter(fecha_cobro__gte=filtros["fecha_desde"])
     if filtros.get("fecha_hasta"):
         qs = qs.filter(fecha_cobro__lte=filtros["fecha_hasta"])
     if filtros.get("estado"):
         qs = qs.filter(estado_cxc__iexact=filtros["estado"])
+    if filtros.get("estado_pago"):
+        qs = qs.filter(estado_pago__icontains=filtros["estado_pago"])
+    if filtros.get("caldas_tipo_persona"):
+        qs = qs.filter(datos_extra__tipo_persona=filtros["caldas_tipo_persona"])
+    if filtros.get("caldas_periodo"):
+        qs = qs.filter(datos_extra__periodo=filtros["caldas_periodo"])
+    if filtros.get("caldas_ano"):
+        qs = qs.filter(datos_extra__ano=filtros["caldas_ano"])
+    caldas_clasi = filtros.get("caldas_clasi", "")
+    if caldas_clasi:
+        qs = qs.filter(detalles__centro_costo__icontains=caldas_clasi).distinct()
 
     MAIN_OCCS = {"OCC-993", "OCC-209", "OCC-0048", "OCC-0047", "OCC-046"}
 
@@ -389,7 +432,7 @@ def build_rows(proceso, filtros=None):
     for enc in qs:
         extra = enc.datos_extra or {}
         d = enc.fecha_cobro
-        fecha = f"{d.day}/{d.month:02d}/{d.year}" if d else ""
+        fecha = d.strftime("%d/%m/%Y") if d else ""
 
         # Clasificación del concepto principal (I/C/S) para heredar a sanciones/intereses
         detalles = list(enc.detalles.all())
@@ -401,6 +444,8 @@ def build_rows(proceso, filtros=None):
         )
 
         for det in detalles:
+            if caldas_clasi and (det.centro_costo or "").strip().upper() != caldas_clasi.upper():
+                continue
             clasi = (det.centro_costo or "").strip() or enc_clasi
             rows.append([
                 enc.consecutivo_cxc,                    # radicado_externo
@@ -419,7 +464,7 @@ def build_rows(proceso, filtros=None):
                 clasi,                                  # clasificacion
                 _desc(det.codigo_concepto, clasi),      # concepto_externo
                 det.codigo_concepto,                    # código_cpto_saimyr
-                det.valor_total,                        # valor_pagado
+                f"{float(det.valor_total):.2f}" if det.valor_total is not None else "0.00",  # valor_pagado
                 extra.get("codigo_banco", "1"),         # código_banco
                 extra.get("numero_cuenta", "2"),        # número_cuenta
             ])

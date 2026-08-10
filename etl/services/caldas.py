@@ -68,6 +68,46 @@ def _sv(v):
     return str(v).strip()
 
 
+def _split_razon_social(nombre, max_len=25):
+    """
+    Divide un nombre de empresa en 3 partes (nombres, primer_apellido, segundo_apellido).
+    Cada parte tiene máximo max_len caracteres y nunca corta una palabra a la mitad.
+    Si una parte no tiene contenido se rellena con '.'.
+    """
+    words = str(nombre).strip().split()
+    parts = []
+    remaining = list(words)
+
+    for i in range(3):
+        if not remaining:
+            parts.append(".")
+            continue
+        chunk = []
+        while remaining:
+            test = " ".join(chunk + [remaining[0]])
+            if len(test) <= max_len:
+                chunk.append(remaining.pop(0))
+            else:
+                break
+        if not chunk:
+            # Palabra sola supera max_len — truncar
+            chunk = [remaining.pop(0)[:max_len]]
+        # En la tercera parte agregar todas las palabras restantes (truncando si es necesario)
+        if i == 2 and remaining:
+            all_w = chunk + remaining
+            final = []
+            for w in all_w:
+                t = " ".join(final + [w]) if final else w
+                if len(t) <= max_len:
+                    final.append(w)
+                else:
+                    break
+            chunk = final
+        parts.append(" ".join(chunk))
+
+    return parts[0], parts[1], parts[2]
+
+
 def _num(v):
     """Convierte a float seguro. NaN/None/vacío → 0.0 (evita el bug NaN-truthy)."""
     r = pd.to_numeric(v, errors="coerce")
@@ -165,9 +205,7 @@ class ProcesadorCaldas:
             razon     = _sv(r[razon_col]) if razon_col else _sv(r.get("Razon Social", ""))
 
             if tipo_p == "J":
-                nombres = razon
-                ap1     = razon
-                ap2     = "."
+                nombres, ap1, ap2 = _split_razon_social(razon)
             else:
                 nombres = (primer_n + " " + segundo_n).strip()
                 ap1     = primer_a
@@ -309,7 +347,7 @@ class ProcesadorCaldas:
             if orig.empty:
                 continue
             r = orig.iloc[0]
-            ano = int(float(r.get(ano_col, 0) or 0)) if ano_col else 0
+            ano = int(_num(r.get(ano_col, None))) if ano_col else 0
             per = _sv(r.get(per_col, "")) if per_col else ""
             df_enc.at[idx, "descripcion"] = f"PAGO AUTORETENCIÓN {per} {ano} Radicado No. {consec}"
             tc = _col(dec, "24. TOTAL")
@@ -378,7 +416,7 @@ class ProcesadorCaldas:
             if orig.empty:
                 continue
             r = orig.iloc[0]
-            ano = int(float(r.get(ano_col, 0) or 0)) if ano_col else 0
+            ano = int(_num(r.get(ano_col, None))) if ano_col else 0
             per = _sv(r.get(per_col, "")) if per_col else ""
             df_enc.at[idx, "descripcion"] = f"PAGO RETENCIÓN {per} AÑO {ano} Radicado No. {consec}"
             df_enc.at[idx, "total_a_pagar"] = pd.to_numeric(r.get(tot_col, None), errors="coerce") if tot_col else None
@@ -487,7 +525,7 @@ class ProcesadorCaldas:
             if avi_col:
                 val = _num(r.get(avi_col))
                 if val:
-                    det_rows.append(self._det_row(consec, "OCC-69", "", val))
+                    det_rows.append(self._det_row(consec, "69", "", val))
 
             # Sobretasa bomberil
             if bom_col:
@@ -507,6 +545,65 @@ class ProcesadorCaldas:
                 if val:
                     det_rows.append(self._det_row(consec, "OCC-209", "", -abs(val)))
 
+        # ── Ajuste por diferencia entre col 40 y suma de conceptos ─────────────
+        # Solo se agrega si la diferencia es POSITIVA (col40 > suma_conceptos)
+        col40 = _col(dec, "40.")
+
+        if col40:
+            # Acumular suma de conceptos por consecutivo
+            suma_conceptos: dict = {}
+            for row in det_rows:
+                c = row["consecutivo_cxc"]
+                suma_conceptos[c] = suma_conceptos.get(c, 0.0) + float(row["valor_total"])
+
+            # Tipo CIIU predominante por consecutivo (basado en actividades generadas)
+            tipo_predominante: dict = {}
+            for row in det_rows:
+                c = row["consecutivo_cxc"]
+                cl = row.get("centro_costo", "")
+                if cl in ("I", "C", "S"):
+                    if c not in tipo_predominante:
+                        tipo_predominante[c] = {}
+                    tipo_predominante[c][cl] = tipo_predominante[c].get(cl, 0.0) + abs(float(row["valor_total"]))
+
+            OCC_DEC = {"I": "OCC-0048", "C": "OCC-0047", "S": "OCC-046"}
+
+            for _, r in dec.iterrows():
+                try:
+                    consec = str(int(float(r["Consecutivo"])))
+                except Exception:
+                    continue
+
+                col40_val = _num(r.get(col40))
+                if not col40_val:
+                    continue
+
+                suma = suma_conceptos.get(consec, 0.0)
+                gap = round(col40_val - suma)
+
+                if gap <= 0:
+                    continue  # solo diferencias positivas
+
+                # Tipo CIIU predominante para este consecutivo
+                tipos = tipo_predominante.get(consec, {})
+                if not tipos:
+                    # Fallback: buscar en el archivo de actividades por consecutivo
+                    if con_col and ciiu_col:
+                        act_rows = act[act["_consec"] == consec] if "_consec" in act.columns else pd.DataFrame()
+                        for _, ar in act_rows.iterrows():
+                            cl = self._clasi_char(self._tipo_ciiu(self._ciiu_code(ar.get(ciiu_col, ""))))
+                            if cl in ("I", "C", "S"):
+                                tipos[cl] = tipos.get(cl, 0) + 1
+                    if not tipos:
+                        continue  # sin ningún dato CIIU, omitir
+
+                clasi = max(tipos, key=tipos.get)
+                occ = OCC_DEC.get(clasi, "")
+                if not occ:
+                    continue
+
+                det_rows.append(self._det_row(consec, occ, clasi, gap))
+
         df_det = pd.DataFrame(det_rows) if det_rows else self._empty_det()
 
         # descripcion y total
@@ -518,7 +615,7 @@ class ProcesadorCaldas:
             if orig.empty:
                 continue
             r = orig.iloc[0]
-            ano = int(float(r.get(ano_col, 0) or 0)) if ano_col else 0
+            ano = int(_num(r.get(ano_col, None))) if ano_col else 0
             df_enc.at[idx, "descripcion"] = f"DECLARE Y PAGUE AÑO GRAVABLE {ano} Radicado No. {consec}"
             df_enc.at[idx, "total_a_pagar"] = pd.to_numeric(r.get(tot_col, None), errors="coerce") if tot_col else None
 

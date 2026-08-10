@@ -25,6 +25,9 @@ class ProcesadorBase:
     CONCEPTO_EXC = "10153"
     CONCEPTO_EXC_RETE = "10153"
     CONCEPTO_TAR = "10157"
+    CONCEPTO_IND_EXON = "10167"
+    CONCEPTO_COM_EXON = "10166"
+    CONCEPTO_SER_EXON = "10168"
 
     def __init__(self, proceso_codigo, archivos, municipio):
         self.proceso_codigo = proceso_codigo
@@ -108,17 +111,55 @@ class ProcesadorBase:
         return self._ciiu_cache.get(str(codigo).zfill(4), "")
 
     def _base_rename(self, dec, consec_col="Consecutivo 1"):
-        rn = {
-            "Tipo de documento": "tipo_documento",
-            "Numero de documento": "numero_documento",
-            "Número de documento": "numero_documento",
-            "Primer nombre": "primer_nombre",
-            "Segundo nombre": "segundo_nombre",
-            "Primer apellido": "primer_apellido",
-            "Segundo apellido": "segundo_apellido",
-            "Nombre productor": "razon_social",
-        }
-        dec.rename(columns={k: v for k, v in rn.items() if k in dec.columns}, inplace=True)
+        # Función de búsqueda fuzzy (normaliza acentos, mayúsculas)
+        def _fuzz(df, *keywords, exclude=None):
+            for kw in keywords:
+                kw_n = self._norm(kw)
+                for c in df.columns:
+                    cn = self._norm(c)
+                    if kw_n in cn:
+                        if exclude and any(self._norm(ex) in cn for ex in exclude):
+                            continue
+                        return c
+            return None
+
+        rn = {}
+
+        # Tipo de documento — evitar que "NUMERO" aparezca antes
+        if "tipo_documento" not in dec.columns:
+            c = _fuzz(dec, "Tipo de documento", "Tipo doc", "Tipodocumento",
+                      exclude=["NUMERO", "NUMERO"])
+            if c:
+                rn[c] = "tipo_documento"
+
+        # Número de documento — excluir columnas que contengan "tipo"
+        if "numero_documento" not in dec.columns:
+            c = _fuzz(dec,
+                      "Numero de documento", "Número de documento",
+                      "Nro de documento", "Nro. de documento",
+                      "Numero documento", "Nro documento",
+                      exclude=["tipo", "TIPO"])
+            if c:
+                rn[c] = "numero_documento"
+
+        # Nombres y apellidos (matching exacto primero, luego fuzzy)
+        for exact, target in [
+            ("Primer nombre",    "primer_nombre"),
+            ("Segundo nombre",   "segundo_nombre"),
+            ("Primer apellido",  "primer_apellido"),
+            ("Segundo apellido", "segundo_apellido"),
+            ("Nombre productor", "razon_social"),
+        ]:
+            if target not in dec.columns and exact not in rn.values():
+                if exact in dec.columns:
+                    rn[exact] = target
+                else:
+                    c = _fuzz(dec, exact)
+                    if c and c not in rn:
+                        rn[c] = target
+
+        if rn:
+            dec.rename(columns=rn, inplace=True)
         # Solo una columna de fecha: "Fecha de la visita" tiene prioridad sobre "Fecha Pago"
         if "Fecha de la visita" in dec.columns:
             dec.rename(columns={"Fecha de la visita": "fecha_cobro"}, inplace=True)
@@ -154,6 +195,19 @@ class ProcesadorBase:
                 "total_a_pagar", "estado_pago", "estado_cxc"]
         df = dec[[c for c in cols if c in dec.columns]].copy()
         df["datos_extra"] = [{}] * len(df)
+        # Quitar .0 de campos de identidad leídos como float desde Excel
+        def _clean_id(v):
+            s = str(v).strip()
+            if s in ("", "nan", "None"): return ""
+            try:
+                f = float(s)
+                if f == int(f): return str(int(f))
+            except (ValueError, TypeError):
+                pass
+            return s
+        for _col in ["numero_documento"]:
+            if _col in df.columns:
+                df[_col] = df[_col].apply(_clean_id)
         return df
 
     @staticmethod
@@ -216,6 +270,15 @@ class ProcesadorBase:
         cname = self._resolve_consec_col(dec)
         dec["consecutivo_cxc"] = self._cxc_id(dec[cname])
         dec = self._base_rename(dec, cname)
+        # Fallback: tipo/numero documento vacíos → usar 'Cédula/NIT propietario'
+        ced_col = next((c for c in dec.columns
+                        if "CEDULA" in self._norm(c) and "NIT" in self._norm(c)), None)
+        if ced_col and "numero_documento" in dec.columns:
+            mask_empty = dec["numero_documento"].astype(str).str.strip().isin(["", "nan"])
+            if mask_empty.any():
+                dec.loc[mask_empty, "numero_documento"] = dec.loc[mask_empty, ced_col].astype(str).str.strip()
+                if "tipo_documento" in dec.columns:
+                    dec.loc[mask_empty, "tipo_documento"] = "NIT"
         ano = dec.get("1. Año", dec.get("1.1 Año", pd.Series([0]*len(dec)))).fillna(0)
         c1  = dec.get(cname, pd.Series([0]*len(dec))).fillna(0)
         per = dec.get("1.1 Periodo declarado", dec.get("1. Periodo declarado", pd.Series([""]*len(dec)))).fillna("")
@@ -300,14 +363,22 @@ class ProcesadorBase:
         dec["estado_pago"] = dec.get("Estado Pago", pd.Series([""]*len(dec))).fillna("").astype(str).str.upper()
         dec = self._merge_cxc(dec)
         df_enc = self._enc(dec)
+        # Intentar con "RETENIDO" primero (para no tomar Base Gravable); si no existe,
+        # caer en búsqueda solo por tipo de actividad (Copa puede no tener esa palabra).
+        def _rete_extra(substr, concepto, also_tar=False):
+            r = self._extra(dec, substr, concepto, also="RETENIDO")
+            if r is None:
+                r = self._extra(dec, substr, concepto)
+            return r
+
         extras = [e for e in [
-            self._extra(dec, "INDUSTRIAL",  self.CONCEPTO_IND_RETE),
-            self._extra(dec, "COMERCIAL",   self.CONCEPTO_COM_RETE),
-            self._extra(dec, "SERVICIOS",   self.CONCEPTO_SER_RETE),
-            self._extra(dec, "SANCION",     self.CONCEPTO_SAN),
-            self._extra(dec, "INTERES",     self.CONCEPTO_INT),
-            self._extra(dec, "EXCESO",      self.CONCEPTO_EXC_RETE),
-            self._extra(dec, "TARJETA",     self.CONCEPTO_TAR),
+            _rete_extra("INDUSTRIAL", self.CONCEPTO_IND_RETE),
+            _rete_extra("COMERCIAL",  self.CONCEPTO_COM_RETE),
+            _rete_extra("SERVICIOS",  self.CONCEPTO_SER_RETE),
+            self._extra(dec, "SANCION", self.CONCEPTO_SAN),
+            self._extra(dec, "INTERES", self.CONCEPTO_INT),
+            self._extra(dec, "EXCESO",  self.CONCEPTO_EXC_RETE),
+            _rete_extra("TARJETA",    self.CONCEPTO_TAR),
         ] if e is not None]
         df_det = pd.concat(extras, ignore_index=True) if extras else self._empty_det()
         return df_enc, df_det
@@ -324,7 +395,14 @@ class ProcesadorBase:
         dec["descripcion"] = ("DECLARE Y PAGUE AÑO GRAVABLE "
                               + ano.astype(float).astype(int).astype(str)
                               + " Radicado No. " + c2.astype(float).astype(int).astype(str))
-        tc = next((c for c in dec.columns if "40." in c), None)
+        def _find_col(cols, n):
+            c = next((c for c in cols if f"{n}." in c), None)
+            if c is None:
+                c = next((c for c in cols
+                          if c.strip().startswith(f"{n} ") or c.strip().startswith(f"{n}.")), None)
+            return c
+
+        tc = _find_col(dec.columns, "40")
         dec["total_a_pagar"] = pd.to_numeric(dec[tc], errors="coerce") if tc else None
         dec["estado_pago"] = dec.get("Estado Pago", pd.Series([""]*len(dec))).fillna("").astype(str).str.upper()
         dec = self._merge_cxc(dec)
@@ -365,21 +443,81 @@ class ProcesadorBase:
             self._extra(dec, "SANCION",  self.CONCEPTO_SAN),
             self._extra(dec, "INTERES",  self.CONCEPTO_INT),
         ] if e is not None]
-        df_det = pd.concat([ag] + extras, ignore_index=True)
 
-        # ── Ajuste de redondeo (todos los conceptos son positivos en Copa) ──
-        # diff = suma_conceptos - total_40
-        # |diff| < 500 → quitar la diferencia del concepto de mayor valor.
-        # |diff| >= 500 → aproximar total_40 al siguiente múltiplo de 1000.
-        import math as _math
+        # ── Splits proporcionales por tipo de actividad ──────────────────────
+        # Retenciones (27.), autorretenciones (28.), anticipo (29.) y
+        # pago voluntario (39.) se distribuyen entre INDUSTRIAL/COMERCIAL/SERVICIOS
+        # en proporción al ICA de cada tipo respecto al total del consecutivo.
+        split_extras = []
+        if not ag.empty and "consecutivo_cxc" in ag.columns:
+            total_ica = (ag.groupby("consecutivo_cxc")["valor_unitario"]
+                         .sum().reset_index(name="total_ica"))
+            ag_pct = (ag[["consecutivo_cxc", "codigo_concepto", "valor_unitario"]]
+                      .merge(total_ica, on="consecutivo_cxc", how="left"))
+            ag_pct["pct"] = ag_pct.apply(
+                lambda r: r["valor_unitario"] / r["total_ica"] if r["total_ica"] else 0,
+                axis=1)
+            MAPA_EXON = {self.CONCEPTO_IND_DEC: self.CONCEPTO_IND_EXON,
+                         self.CONCEPTO_COM_DEC: self.CONCEPTO_COM_EXON,
+                         self.CONCEPTO_SER_DEC: self.CONCEPTO_SER_EXON}
+            MAPA_RETE = {self.CONCEPTO_IND_DEC: "10150", self.CONCEPTO_COM_DEC: "10151", self.CONCEPTO_SER_DEC: "10152"}
+            MAPA_AUTO = {self.CONCEPTO_IND_DEC: "10140", self.CONCEPTO_COM_DEC: "10139", self.CONCEPTO_SER_DEC: "10141"}
+            MAPA_ANTI = {self.CONCEPTO_IND_DEC: "10137", self.CONCEPTO_COM_DEC: "10136ANT", self.CONCEPTO_SER_DEC: "10138"}
+            MAPA_VOL  = {self.CONCEPTO_IND_DEC: "10148", self.CONCEPTO_COM_DEC: "10147", self.CONCEPTO_SER_DEC: "10149"}
+            for num_str, mapa, negate in [
+                ("26", MAPA_EXON, True),   # Exoneración      (-)
+                ("27", MAPA_RETE, True),   # Retenciones      (-)
+                ("28", MAPA_AUTO, True),   # Autorretenciones (-)
+                ("29", MAPA_ANTI, True),   # Anticipos        (-)
+                ("39", MAPA_VOL,  False),  # Pago voluntario  (+)
+            ]:
+                src_col = _find_col(dec.columns, num_str)
+                if not src_col:
+                    continue
+                totals = dec[["consecutivo_cxc", src_col]].copy()
+                totals[src_col] = pd.to_numeric(totals[src_col], errors="coerce")
+                totals = totals[totals[src_col].notna() & (totals[src_col] != 0)]
+                if totals.empty:
+                    continue
+                merged = ag_pct.merge(totals, on="consecutivo_cxc", how="inner")
+                merged["nuevo_cod"] = merged["codigo_concepto"].map(mapa)
+                merged = merged[merged["nuevo_cod"].notna()].copy()
+                merged["valor_split"] = (merged[src_col] * merged["pct"]).round(0)
+                if negate:
+                    merged["valor_split"] = -merged["valor_split"].abs()
+                else:
+                    merged["valor_split"] = merged["valor_split"].abs()
+                merged = merged[merged["valor_split"] != 0]
+                if merged.empty:
+                    continue
+                t = (merged[["consecutivo_cxc", "nuevo_cod", "valor_split"]]
+                     .rename(columns={"nuevo_cod": "codigo_concepto",
+                                      "valor_split": "valor_unitario"})
+                     .copy())
+                t["valor_total"]  = t["valor_unitario"]
+                t["centro_costo"] = self.CENTRO
+                t["cantidad"]     = 1
+                split_extras.append(t[["consecutivo_cxc", "codigo_concepto",
+                                       "centro_costo", "cantidad",
+                                       "valor_unitario", "valor_total"]])
 
+        df_det = pd.concat([ag] + extras + split_extras, ignore_index=True)
+
+        # ── Ajuste de cierre: sum(conceptos) debe ser exactamente total_40 ────
+        # 1. Si total_40 no es múltiplo de 1000, redondearlo al más cercano.
+        # 2. Restar el diff residual del concepto positivo de mayor valor.
         if tc and "consecutivo_cxc" in df_det.columns:
             for idx, enc_row in df_enc.iterrows():
-                consec = enc_row.get("consecutivo_cxc", "")
+                consec   = str(enc_row.get("consecutivo_cxc", "")).strip()
                 total_40 = pd.to_numeric(enc_row.get("total_a_pagar"), errors="coerce")
                 if pd.isna(total_40):
                     continue
-                sub = df_det[df_det["consecutivo_cxc"] == consec]
+                # Paso 1: normalizar total al múltiplo de 1000 más cercano
+                total_norm = round(total_40 / 1000) * 1000
+                if total_norm != total_40:
+                    total_40 = total_norm
+                    df_enc.at[idx, "total_a_pagar"] = total_40
+                sub = df_det[df_det["consecutivo_cxc"].astype(str).str.strip() == consec]
                 if sub.empty:
                     continue
                 signed_sum = round(
@@ -388,19 +526,15 @@ class ProcesadorBase:
                 diff = round(signed_sum - total_40, 2)
                 if abs(diff) == 0:
                     continue
-                if abs(diff) < 500:
-                    # Buscar el concepto que al ajustarse quede en múltiplo de 1000.
-                    tmp = sub.copy()
-                    tmp["_v"] = tmp["valor_total"].apply(
-                        lambda x: pd.to_numeric(x, errors="coerce") or 0)
-                    tmp["_new"] = tmp["_v"] - diff
-                    tmp["_rem"] = tmp["_new"].apply(
-                        lambda v: min(v % 1000, 1000 - v % 1000))
-                    best_idx = tmp["_rem"].idxmin()
-                    new_val = round(float(tmp.at[best_idx, "_new"]), 2)
-                    df_det.at[best_idx, "valor_unitario"] = new_val
-                    df_det.at[best_idx, "valor_total"]    = new_val
-                else:
-                    df_enc.at[idx, "total_a_pagar"] = _math.ceil(total_40 / 1000) * 1000
+                # Paso 2: ajustar el concepto positivo más grande para cerrar diff
+                pos_mask = sub["valor_total"].apply(
+                    lambda x: (pd.to_numeric(x, errors="coerce") or 0) > 0)
+                pos_sub = sub[pos_mask].copy() if pos_mask.any() else sub.copy()
+                pos_sub["_v"] = pos_sub["valor_total"].apply(
+                    lambda x: pd.to_numeric(x, errors="coerce") or 0)
+                best_idx = pos_sub["_v"].idxmax()
+                new_val  = round(float(pos_sub.at[best_idx, "_v"]) - diff, 2)
+                df_det.at[best_idx, "valor_unitario"] = new_val
+                df_det.at[best_idx, "valor_total"]    = new_val
 
         return df_enc, df_det

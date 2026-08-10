@@ -2,6 +2,12 @@ from pathlib import Path
 import os
 from decouple import config, Csv
 
+try:
+    import MySQLdb  # noqa: F401
+except ImportError:
+    import pymysql
+    pymysql.install_as_MySQLdb()
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = config('SECRET_KEY')

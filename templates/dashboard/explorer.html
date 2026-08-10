@@ -67,11 +67,11 @@
     <!-- Export -->
     {% with _ef=export_filter_qs %}
     <div class="ms-auto d-flex gap-1">
-      <a href="{% url 'exportar' proceso.id %}?tab={{ tab }}&format=excel&{{ export_filter_qs }}"
+      <a href="{% url 'exportar' proceso.id %}?tab={{ tab }}&format=excel&{{ export_filter_qs|safe }}"
          class="btn btn-sm btn-outline-success"><i class="bi bi-file-earmark-excel me-1"></i>Excel</a>
-      <a href="{% url 'exportar' proceso.id %}?tab={{ tab }}&format=csv&{{ export_filter_qs }}"
+      <a href="{% url 'exportar' proceso.id %}?tab={{ tab }}&format=csv&{{ export_filter_qs|safe }}"
          class="btn btn-sm btn-outline-secondary"><i class="bi bi-filetype-csv me-1"></i>CSV</a>
-      <a href="{% url 'exportar' proceso.id %}?tab={{ tab }}&format=txt&{{ export_filter_qs }}"
+      <a href="{% url 'exportar' proceso.id %}?tab={{ tab }}&format=txt&{{ export_filter_qs|safe }}"
          class="btn btn-sm btn-outline-secondary"><i class="bi bi-file-text me-1"></i>TXT</a>
     </div>
     {% endwith %}
@@ -705,19 +705,19 @@
 <nav class="mt-3">
   <ul class="pagination pagination-sm justify-content-center mb-0">
     <li class="page-item {% if not page_obj.has_previous %}disabled{% endif %}">
-      <a class="page-link" href="?tab={{ tab }}&q={{ q }}&fecha_desde={{ fecha_desde }}&fecha_hasta={{ fecha_hasta }}&estado={{ estado_filtro }}&per_page={{ per_page }}&page=1">&#124;&laquo;</a>
+      <a class="page-link" href="?{{ pagination_qs|safe }}&page=1">&#124;&laquo;</a>
     </li>
     <li class="page-item {% if not page_obj.has_previous %}disabled{% endif %}">
-      <a class="page-link" href="?tab={{ tab }}&q={{ q }}&fecha_desde={{ fecha_desde }}&fecha_hasta={{ fecha_hasta }}&estado={{ estado_filtro }}&per_page={{ per_page }}&page={% if page_obj.has_previous %}{{ page_obj.previous_page_number }}{% else %}1{% endif %}">&#8249;</a>
+      <a class="page-link" href="?{{ pagination_qs|safe }}&page={% if page_obj.has_previous %}{{ page_obj.previous_page_number }}{% else %}1{% endif %}">&#8249;</a>
     </li>
     <li class="page-item disabled">
       <span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
     </li>
     <li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">
-      <a class="page-link" href="?tab={{ tab }}&q={{ q }}&fecha_desde={{ fecha_desde }}&fecha_hasta={{ fecha_hasta }}&estado={{ estado_filtro }}&per_page={{ per_page }}&page={% if page_obj.has_next %}{{ page_obj.next_page_number }}{% else %}{{ page_obj.paginator.num_pages }}{% endif %}">&#8250;</a>
+      <a class="page-link" href="?{{ pagination_qs|safe }}&page={% if page_obj.has_next %}{{ page_obj.next_page_number }}{% else %}{{ page_obj.paginator.num_pages }}{% endif %}">&#8250;</a>
     </li>
     <li class="page-item {% if not page_obj.has_next %}disabled{% endif %}">
-      <a class="page-link" href="?tab={{ tab }}&q={{ q }}&fecha_desde={{ fecha_desde }}&fecha_hasta={{ fecha_hasta }}&estado={{ estado_filtro }}&per_page={{ per_page }}&page={{ page_obj.paginator.num_pages }}">&raquo;&#124;</a>
+      <a class="page-link" href="?{{ pagination_qs|safe }}&page={{ page_obj.paginator.num_pages }}">&raquo;&#124;</a>
     </li>
   </ul>
 </nav>

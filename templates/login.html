@@ -3,53 +3,265 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Iniciar Sesión - Sistema de Conciliaciones</title>
+  <title>Iniciar Sesión — Sistema de Conciliaciones</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap">
   {% load static %}
   <link rel="stylesheet" href="{% static 'css/main.css' %}">
   <style>
-    body { background: #f0f4f8; min-height: 100vh; display:flex; align-items:center; justify-content:center; }
-    .login-card { max-width:420px; width:100%; }
-    .login-logo-bar { background:#1B3A6B; padding:1.8rem 1.5rem; border-radius:.5rem .5rem 0 0; text-align:center; }
-    .login-logo-bar img { max-height:90px; max-width:260px; object-fit:contain; display:block; margin:0 auto; }
-    .login-body { background:#fff; padding:2rem; border-radius:0 0 .5rem .5rem; box-shadow:0 4px 20px rgba(0,0,0,.15); }
-    .btn-login { background:#1B3A6B; color:#fff; width:100%; padding:.75rem; font-size:1rem; border:none; border-radius:.4rem; }
-    .btn-login:hover { background:#2d5fa0; color:#fff; }
+    html, body { height: 100%; margin: 0; font-family: 'Outfit', sans-serif; }
+
+    /* Split layout */
+    .login-root {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      min-height: 100dvh;
+    }
+
+    /* Left brand panel */
+    .login-brand {
+      background: #1B3A6B;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 3rem 3.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .login-brand::before {
+      content: "";
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse 70% 60% at 110% 10%, rgba(45,106,159,0.55) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 50% at -10% 90%, rgba(255,255,255,0.04) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .brand-dot-grid {
+      position: absolute; inset: 0;
+      background-image: radial-gradient(rgba(255,255,255,0.065) 1px, transparent 1px);
+      background-size: 28px 28px;
+      pointer-events: none;
+    }
+    .brand-ring {
+      position: absolute;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.06);
+      pointer-events: none;
+    }
+    .brand-ring-1 { width: 420px; height: 420px; right: -140px; top: -100px; }
+    .brand-ring-2 { width: 260px; height: 260px; right: -40px; top: 60px; border-color: rgba(255,255,255,0.04); }
+    .brand-ring-3 { width: 500px; height: 500px; left: -200px; bottom: -200px; }
+    .brand-content { position: relative; z-index: 1; }
+
+    .brand-logo      { max-height: 52px; max-width: 180px; object-fit: contain; }
+    .brand-logo-text { font-size: 1.1rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255,255,255,0.9); }
+
+    .brand-badge {
+      display: inline-flex; align-items: center; gap: 0.45rem;
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 99px; padding: 0.32rem 0.85rem;
+      font-size: 0.72rem; font-weight: 600; letter-spacing: 0.06em;
+      text-transform: uppercase; color: rgba(255,255,255,0.72);
+      margin-bottom: 1.75rem;
+    }
+    .brand-badge-dot {
+      width: 6px; height: 6px; border-radius: 50%; background: #4ade80;
+      animation: pulse-dot 2.2s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.55; transform: scale(0.72); }
+    }
+    .brand-headline {
+      font-size: 2.5rem; font-weight: 800; line-height: 1.1;
+      letter-spacing: -0.02em; color: #fff; margin: 0;
+    }
+    .brand-sub {
+      font-size: 0.93rem; font-weight: 400; color: rgba(255,255,255,0.5);
+      margin-top: 0.75rem; max-width: 30ch; line-height: 1.6;
+    }
+
+    /* Right form panel */
+    .login-form-panel {
+      background: #fff;
+      display: flex; flex-direction: column;
+      justify-content: center; align-items: flex-start;
+      padding: 3rem 4rem;
+      position: relative;
+    }
+    .login-form-inner { max-width: 380px; width: 100%; }
+
+    .login-title {
+      font-size: 1.65rem; font-weight: 800;
+      letter-spacing: -0.02em; color: #0f172a; line-height: 1.2;
+    }
+    .login-subtitle { font-size: 0.87rem; color: #64748b; margin-top: 0.3rem; margin-bottom: 2rem; }
+
+    .login-form-panel .form-label {
+      font-size: 0.77rem; font-weight: 600; color: #475569; margin-bottom: 0.35rem;
+    }
+    .login-form-panel .form-control {
+      border: 1px solid rgba(15,23,42,0.14); border-radius: 8px;
+      font-size: 0.9rem; font-family: 'Outfit', sans-serif;
+      padding: 0.6rem 0.85rem; color: #0f172a; background: #f8fafc;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .login-form-panel .form-control:focus {
+      border-color: #1B3A6B; box-shadow: 0 0 0 3px rgba(27,58,107,0.1);
+      background: #fff; outline: none;
+    }
+
+    .input-password-wrap       { position: relative; }
+    .input-password-wrap input { padding-right: 2.75rem; }
+    .toggle-password {
+      position: absolute; right: 0.8rem; top: 50%; transform: translateY(-50%);
+      background: none; border: none; padding: 0; cursor: pointer;
+      color: #94a3b8; transition: color 0.15s;
+      display: flex; align-items: center;
+    }
+    .toggle-password:hover { color: #1B3A6B; }
+
+    .btn-login {
+      width: 100%; padding: 0.7rem; font-size: 0.92rem; font-weight: 700;
+      font-family: 'Outfit', sans-serif; letter-spacing: 0.01em;
+      background: #1B3A6B; color: #fff; border: none; border-radius: 8px;
+      cursor: pointer; transition: background 0.15s, transform 0.1s;
+    }
+    .btn-login:hover  { background: #2d6a9f; color: #fff; }
+    .btn-login:active { transform: translateY(1px) scale(0.99); }
+
+    .forgot-link { font-size: 0.77rem; font-weight: 500; color: #64748b; text-decoration: none; transition: color 0.15s; }
+    .forgot-link:hover { color: #1B3A6B; }
+
+    .dev-footer { position: absolute; bottom: 1.5rem; left: 0; right: 0; display: flex; justify-content: center; }
+    .btn-filodev {
+      display: inline-flex; align-items: center; gap: 0.45rem;
+      padding: 0.3rem 0.85rem 0.3rem 0.45rem; font-size: 0.74rem; font-weight: 600;
+      border-radius: 99px; background: transparent; border: 1px solid #d1fae5;
+      color: #059669; text-decoration: none; transition: all 0.2s;
+    }
+    .btn-filodev:hover { background: #059669; color: #fff; border-color: #059669; }
+    .btn-filodev:hover img { filter: brightness(0) invert(1); }
+
+    @media (max-width: 768px) {
+      .login-root { grid-template-columns: 1fr; }
+      .login-brand { display: none; }
+      .login-form-panel { padding: 2.5rem 1.5rem; justify-content: flex-start; padding-top: 4rem; }
+      .login-form-inner { max-width: 100%; }
+    }
   </style>
 </head>
 <body>
-<div class="login-card">
-  <div class="login-logo-bar">
-    {% if gobs_logos %}
-      <img src="/gobs-media/{{ gobs_logos.1 }}" alt="Logo institucional">
-    {% else %}
-      <h4 class="text-white mb-0">GOBS</h4>
-    {% endif %}
-  </div>
-  <div class="login-body">
-    <h5 class="mb-1 text-center fw-bold" style="color:#1B3A6B;letter-spacing:.04em;">SISTEMA DE CXC</h5>
-    <p class="text-muted text-center small mb-3">Ingrese sus credenciales asignadas</p>
-    <form method="post" novalidate>
-      {% csrf_token %}
-      {% for field in form %}
+
+<div class="login-root">
+
+  <!-- Brand panel -->
+  <aside class="login-brand">
+    <div class="brand-dot-grid"></div>
+    <div class="brand-ring brand-ring-1"></div>
+    <div class="brand-ring brand-ring-2"></div>
+    <div class="brand-ring brand-ring-3"></div>
+
+    <div class="brand-content">
+      {% if gobs_logos %}
+        <img src="/gobs-media/{{ gobs_logos.1 }}" alt="Logo institucional"
+             class="brand-logo" style="filter:brightness(0) invert(1);">
+      {% else %}
+        <span class="brand-logo-text">GOBS</span>
+      {% endif %}
+    </div>
+
+    <div class="brand-content">
+      <div class="brand-badge">
+        <span class="brand-badge-dot"></span>
+        Sistema activo
+      </div>
+      <h1 class="brand-headline">Sistema<br>de CXC</h1>
+      <p class="brand-sub">Conciliación de cuentas por cobrar para entidades municipales.</p>
+    </div>
+
+    <div class="brand-content" style="opacity:.3;">
+      <span style="font-size:.7rem;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#fff;">
+        Gestión tributaria municipal
+      </span>
+    </div>
+  </aside>
+
+  <!-- Form panel -->
+  <section class="login-form-panel">
+    <div class="login-form-inner">
+
+      <h2 class="login-title">Bienvenido</h2>
+      <p class="login-subtitle">Ingrese sus credenciales para continuar</p>
+
+      <form method="post" novalidate>
+        {% csrf_token %}
+
+        {% for field in form %}
         <div class="mb-3">
-          <label class="form-label small fw-semibold">{{ field.label }}</label>
-          {{ field }}
+          <label class="form-label">{{ field.label }}</label>
+          {% if field.field.widget.input_type == 'password' %}
+            <div class="input-password-wrap">
+              {{ field }}
+              <button type="button" class="toggle-password" tabindex="-1"
+                      onclick="togglePassword(this)" aria-label="Mostrar/ocultar contraseña">
+                <svg class="eye-icon" xmlns="http://www.w3.org/2000/svg" width="17" height="17" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/>
+                  <path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/>
+                </svg>
+                <svg class="eye-off-icon" xmlns="http://www.w3.org/2000/svg" width="17" height="17" fill="currentColor" viewBox="0 0 16 16" style="display:none">
+                  <path d="M13.359 11.238C15.06 9.72 16 8 16 8s-3-5.5-8-5.5a7.028 7.028 0 0 0-2.79.588l.77.771A5.944 5.944 0 0 1 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.134 13.134 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755-.165.165-.337.328-.517.486l.708.709z"/>
+                  <path d="M11.297 9.176a3.5 3.5 0 0 0-4.474-4.474l.823.823a2.5 2.5 0 0 1 2.829 2.829l.822.822zm-2.943 1.299.822.822a3.5 3.5 0 0 1-4.474-4.474l.823.823a2.5 2.5 0 0 0 2.829 2.829z"/>
+                  <path d="M3.35 5.47c-.18.16-.353.322-.518.487A13.134 13.134 0 0 0 1.172 8l.195.288c.335.48.83 1.12 1.465 1.755C4.121 11.332 5.881 12.5 8 12.5c.716 0 1.39-.133 2.02-.36l.77.772A7.029 7.029 0 0 1 8 13.5C3 13.5 0 8 0 8s.939-1.721 2.641-3.238l.708.709zm10.296 8.884-12-12 .708-.708 12 12-.708.708z"/>
+                </svg>
+              </button>
+            </div>
+          {% else %}
+            {{ field }}
+          {% endif %}
           {% if field.errors %}
-            <div class="text-danger small mt-1">{{ field.errors.0 }}</div>
+            <div class="text-danger mt-1" style="font-size:.76rem;">{{ field.errors.0 }}</div>
           {% endif %}
         </div>
-      {% endfor %}
-      {% if form.non_field_errors %}
-        <div class="alert alert-danger py-2 small">{{ form.non_field_errors.0 }}</div>
-      {% endif %}
-      <button type="submit" class="btn-login mt-2">Iniciar Sesión</button>
-    </form>
-    <div class="text-center mt-3">
-      <a href="{% url 'password_reset' %}" class="text-muted small">¿Olvidó su contraseña?</a>
+        {% endfor %}
+
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger py-2 mb-3" style="font-size:.82rem;border-radius:8px;">
+            {{ form.non_field_errors.0 }}
+          </div>
+        {% endif %}
+
+        <button type="submit" class="btn-login mt-1">Iniciar Sesión</button>
+      </form>
+
+      <div class="text-center mt-3">
+        <a href="{% url 'password_reset' %}" class="forgot-link">¿Olvidó su contraseña?</a>
+      </div>
     </div>
-  </div>
+
+    <div class="dev-footer">
+      <a href="https://filosdev.com" target="_blank" rel="noopener" class="btn-filodev">
+        <img src="/gobs-media/logofilosdev.jpeg" alt="filosdev" style="height:18px;width:auto;border-radius:3px;">
+        filosdev.com
+      </a>
+    </div>
+  </section>
+
 </div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+function togglePassword(btn) {
+  const input  = btn.closest('.input-password-wrap').querySelector('input');
+  const eyeOn  = btn.querySelector('.eye-icon');
+  const eyeOff = btn.querySelector('.eye-off-icon');
+  const hide   = input.type === 'password';
+  input.type         = hide ? 'text'  : 'password';
+  eyeOn.style.display  = hide ? 'none' : '';
+  eyeOff.style.display = hide ? ''     : 'none';
+}
+</script>
 </body>
 </html>
