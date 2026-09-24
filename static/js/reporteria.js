@@ -7,7 +7,7 @@
 
   const S1 = '#2a78d6', S2 = '#eb6834';
   const RAMPA = ['#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95', '#104281'];
-  const FILTROS = ['proceso', 'ano', 'pago', 'cxc', 'periodo'];
+  const FILTROS = ['proceso', 'ano', 'pago', 'cxc', 'periodo', 'doc', 'q'];
   const SVG_TAGS = new Set(['svg', 'g', 'rect', 'path', 'line', 'text', 'title']);
   const NS = 'http://www.w3.org/2000/svg';
 
@@ -138,6 +138,83 @@
   }
   const vacio = (cont, msg) => clear(cont).append(el('div', { class: 'rp-empty', text: msg }));
 
+  /* ── Buscador de contribuyente ──────────────────────────────── */
+  const inp = $('rp-q'), lista = $('rp-sugerencias'), btnX = $('rp-q-x');
+  let sugs = [], act = -1, tBus = null, ctlBus = null;
+  const opciones = () => [{ libre: true }].concat(sugs);
+  function cerrarSug() { lista.hidden = true; inp.setAttribute('aria-expanded', 'false'); act = -1; }
+  function pintarSug() {
+    const texto = inp.value.trim();
+    clear(lista);
+    opciones().forEach((o, i) => {
+      const cuerpo = o.libre
+        ? [el('div', { class: 'rp-sug-n', text: `Buscar «${texto}» en todos los contribuyentes` }), el('div', { class: 'rp-sug-m', text: 'Filtra por cualquier coincidencia de nombre o documento' })]
+        : [el('div', { class: 'rp-sug-n', text: o.nombre }),
+           el('div', { class: 'rp-sug-m', text: `${o.documento} · ${nf.format(o.n)} declaraciones · ${o.pendientes ? nf.format(o.pendientes) + ' pendientes (' + money(o.valor_pendiente) + ')' : 'sin pendientes'}` })];
+      lista.append(el('li', { role: 'option', 'aria-selected': String(i === act) },
+        el('button', { type: 'button', class: 'rp-sug-i' + (i === act ? ' on' : '') + (o.libre ? ' rp-sug-libre' : ''), onclick: () => elegir(o) }, cuerpo)));
+    });
+    lista.hidden = false;
+    inp.setAttribute('aria-expanded', 'true');
+  }
+  function elegir(o) {
+    if (o.libre) { const t = inp.value.trim(); if (t.length < 2) return; st.q = t; st.doc = null; }
+    else { st.doc = o.documento; st.q = null; }
+    cerrarSug(); inp.blur(); refresh();
+  }
+  function renderBusqueda() {
+    if (document.activeElement !== inp) {
+      inp.value = st.doc ? ((datos.contribuyente && datos.contribuyente.nombre) || st.doc) : (st.q || '');
+    }
+    btnX.hidden = !(inp.value || st.doc || st.q);
+  }
+  inp.addEventListener('input', () => {
+    btnX.hidden = !inp.value;
+    const v = inp.value.trim();
+    clearTimeout(tBus);
+    if (v.length < 2) { sugs = []; cerrarSug(); return; }
+    tBus = setTimeout(async () => {
+      if (ctlBus) ctlBus.abort();
+      ctlBus = new AbortController();
+      try {
+        const r = await fetch(root.dataset.buscar + '?' + new URLSearchParams({ municipio: st.municipio, q: v }), { signal: ctlBus.signal, credentials: 'same-origin' });
+        sugs = (await r.json()).resultados || [];
+        act = -1;
+        pintarSug();
+      } catch (e) { /* búsqueda cancelada por una más reciente */ }
+    }, 220);
+  });
+  inp.addEventListener('keydown', e => {
+    const n = opciones().length;
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (lista.hidden) pintarSug(); act = Math.min(act + 1, n - 1); pintarSug(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); act = Math.max(act - 1, 0); pintarSug(); }
+    else if (e.key === 'Enter') { e.preventDefault(); elegir(act >= 0 ? opciones()[act] : { libre: true }); }
+    else if (e.key === 'Escape') { cerrarSug(); }
+  });
+  btnX.addEventListener('click', () => { st.doc = null; st.q = null; inp.value = ''; sugs = []; cerrarSug(); refresh(); });
+  document.addEventListener('click', e => { if (!e.target.closest('#rp-search')) cerrarSug(); });
+
+  /* ── Declaraciones del contribuyente buscado ────────────────── */
+  function renderDetalle() {
+    const card = $('card-detalle'), d = datos.detalle;
+    card.hidden = !d;
+    if (!d) return;
+    $('detalle-titulo').textContent = st.doc && datos.contribuyente ? 'Declaraciones de ' + datos.contribuyente.nombre : 'Declaraciones que coinciden con «' + (st.q || '') + '»';
+    $('detalle-hint').textContent = d.total > d.filas.length ? `Mostrando las ${nf.format(d.filas.length)} más recientes de ${nf.format(d.total)}.` : `${nf.format(d.total)} declaraciones.`;
+    const body = $('detalle-body'), csv = datos.municipio.tiene_csv, varios = !st.doc;
+    if (!d.filas.length) return vacio(body, 'No hay declaraciones que coincidan con la búsqueda.');
+    const pagoCel = p => el('span', { class: 'rp-badge' }, el('i', { class: 'rp-dot', style: 'background:' + (p === 'PAGADO' ? S1 : S2) }), p === 'PAGADO' ? 'Pagada' : 'Pendiente');
+    const cols = [varios ? 'Contribuyente' : null, 'Fecha', 'Proceso', 'Período', 'Consecutivo', 'Pago', csv ? 'Sistema' : null, 'Valor'].filter(Boolean);
+    clear(body).append(el('div', { class: 'rp-table-scroll' }, el('table', { class: 'rp-table' },
+      el('thead', {}, el('tr', {}, cols.map(c => el('th', { class: c === 'Valor' ? 'num' : '', text: c })))),
+      el('tbody', {}, d.filas.map(f => el('tr', {},
+        varios ? el('td', {}, el('div', { class: 'rp-name', title: f.nombre, text: f.nombre })) : null,
+        el('td', { text: f.fecha }), el('td', { text: f.proceso }), el('td', { text: f.periodo }), el('td', { text: f.consecutivo }),
+        el('td', {}, pagoCel(f.pago)),
+        csv ? el('td', { text: nombreCxc(f.cxc) }) : null,
+        el('td', { class: 'num', text: moneyFull(f.valor) })))))));
+  }
+
   /* ── Filtros (una sola fila) ────────────────────────────────── */
   function renderFiltros() {
     const cont = clear($('rp-filters'));
@@ -159,6 +236,8 @@
     const chips = [];
     if (st.pago) chips.push(['Pago', nombrePago(st.pago), 'pago']);
     if (st.cxc) chips.push(['Sistema', nombreCxc(st.cxc), 'cxc']);
+    if (st.doc) chips.push(['Contribuyente', (datos.contribuyente && datos.contribuyente.nombre) || st.doc, 'doc']);
+    else if (st.q) chips.push(['Búsqueda', st.q, 'q']);
     if (st.periodo) chips.push(['Período', (datos.tiempo.etiquetas[datos.tiempo.claves.indexOf(st.periodo)] || st.periodo), 'periodo']);
     chips.forEach(([t, v, k]) => cont.append(el('button', { type: 'button', class: 'rp-chip', 'aria-label': 'Quitar filtro ' + t, onclick: () => fijar(k, null) }, t + ':', el('b', { text: v }), ' ✕')));
     if (chips.length || st.proceso || st.ano) {
@@ -373,8 +452,10 @@
   }
 
   function render() {
+    renderBusqueda();
     renderFiltros();
     renderKpis();
+    renderDetalle();
     renderTiempo();
     renderCxc();
     renderCruce();

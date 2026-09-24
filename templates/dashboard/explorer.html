@@ -2,6 +2,7 @@
 {% load etl_extras %}
 {% block title %}Dashboard — {{ proceso.nombre }}{% endblock %}
 {% block breadcrumb %}
+ &rsaquo; <a href="{% url 'reporteria' %}?municipio={{ proceso.municipio.codigo }}">Reportería</a>
  &rsaquo; <a href="{% url 'proceso_list' %}">Procesos</a>
  &rsaquo; <span>{{ proceso.nombre }}</span>
 {% endblock %}
@@ -45,6 +46,9 @@
 
   <!-- Toolbar -->
   <div class="d-flex align-items-center flex-wrap gap-2 mb-3">
+    <a href="{% url 'reporteria' %}?municipio={{ proceso.municipio.codigo }}" class="btn btn-sm btn-outline-secondary me-1">
+      <i class="bi bi-arrow-left me-1"></i>Tablero
+    </a>
     <!-- Tab toggle -->
     <div class="btn-group me-2" role="group">
       <button type="button" class="btn btn-sm tab-btn {% if tab == 'encabezado' %}active{% endif %}" data-tab="encabezado">

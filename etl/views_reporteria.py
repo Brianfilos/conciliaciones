@@ -31,6 +31,8 @@ def _filtros(request):
         "pago": pago if pago in ("PAGADO", "PENDIENTE") else None,
         "cxc": g.get("cxc", "").strip().upper()[:40] or None,
         "periodo": periodo if re.fullmatch(r"\d{4}(-(\d{2}|B\d))?", periodo) else None,
+        "doc": g.get("doc", "").strip()[:30] or None,
+        "q": g.get("q", "").strip()[:60] or None,
     }
 
 
@@ -57,3 +59,13 @@ class ReporteriaDatosView(View):
         if municipio is None:
             return JsonResponse({"error": "Sin municipio"}, status=404)
         return JsonResponse(reporteria.calcular(municipio, _filtros(request)))
+
+
+@method_decorator(login_required, name="dispatch")
+class ReporteriaBuscarView(View):
+    """Sugerencias del buscador de contribuyentes."""
+    def get(self, request):
+        municipio = _municipio(request)
+        if municipio is None:
+            return JsonResponse({"resultados": []})
+        return JsonResponse({"resultados": reporteria.buscar(municipio, request.GET.get("q", ""))})

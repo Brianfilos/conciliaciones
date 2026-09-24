@@ -7,6 +7,7 @@ urlpatterns = [
     path("historial/", views.HistorialView.as_view(), name="historial"),
     path("reporteria/", views_reporteria.ReporteriaView.as_view(), name="reporteria"),
     path("reporteria/datos/", views_reporteria.ReporteriaDatosView.as_view(), name="reporteria_datos"),
+    path("reporteria/buscar/", views_reporteria.ReporteriaBuscarView.as_view(), name="reporteria_buscar"),
     path("dashboard/<int:proceso_id>/", views.DashboardView.as_view(), name="dashboard"),
     path("exportar/<int:proceso_id>/", views.ExportarView.as_view(), name="exportar"),
     path("progreso/<int:ejecucion_id>/", views.ejecutar_progreso, name="ejecutar_progreso"),

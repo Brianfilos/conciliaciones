@@ -123,3 +123,20 @@ button.rp-kpi:hover { box-shadow: var(--shadow-md); transform: translateY(-1px);
 }
 @media (prefers-reduced-motion: reduce) { .rp * { transition: none !important; } }
 @media (forced-colors: active) { .rp svg .mark { stroke: CanvasText; } }
+
+/* Buscador de contribuyente */
+.rp-search { position: relative; display: flex; align-items: center; gap: 10px; background: var(--surface-card, #fff); border: 1px solid var(--border-default); border-radius: var(--r-md, 12px); padding: 0 14px; margin-bottom: 12px; box-shadow: var(--shadow-xs); }
+.rp-search:focus-within { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(15,23,42,.08); }
+.rp-search > i { color: var(--ink-3); }
+.rp-search input { flex: 1; border: 0; outline: 0; background: transparent; padding: 12px 0; font-size: .95rem; color: var(--ink); min-width: 0; }
+.rp-search-x { border: 0; background: var(--wash); color: var(--ink-2); width: 26px; height: 26px; border-radius: 99px; cursor: pointer; line-height: 1; }
+.rp-search-x:hover { background: #e2e8f0; }
+.rp-sug { position: absolute; left: -1px; right: -1px; top: calc(100% + 6px); z-index: 30; list-style: none; margin: 0; padding: 6px; background: #fff; border: 1px solid var(--border-default); border-radius: 12px; box-shadow: var(--shadow-lg); max-height: 380px; overflow: auto; }
+.rp-sug[hidden] { display: none; }
+.rp-sug-i { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 9px 12px; border-radius: 8px; cursor: pointer; color: var(--ink); font: inherit; }
+.rp-sug-i:hover, .rp-sug-i.on { background: var(--wash); }
+.rp-sug-n { font-weight: 600; font-size: .9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-sug-m { font-size: .78rem; color: var(--ink-3); margin-top: 1px; }
+.rp-sug-libre .rp-sug-n { font-weight: 500; color: var(--ink-2); }
+.rp-badge { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; white-space: nowrap; }
+@media (max-width: 900px) { .rp-search input { font-size: 1rem; } }

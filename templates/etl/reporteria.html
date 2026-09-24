@@ -9,7 +9,7 @@
 {% if not datos %}
   <div class="alert alert-light border">No hay un municipio asignado a tu usuario.</div>
 {% else %}
-<div class="rp" id="rp" data-url="{% url 'reporteria_datos' %}" data-municipio="{{ datos.municipio.codigo }}">
+<div class="rp" id="rp" data-url="{% url 'reporteria_datos' %}" data-municipio="{{ datos.municipio.codigo }}" data-buscar="{% url 'reporteria_buscar' %}">
 
   <div class="rp-head">
     <div>
@@ -29,12 +29,28 @@
     </div>
   </div>
 
+  <!-- Buscador de contribuyente: por nombre, razón social o NIT -->
+  <div class="rp-search" id="rp-search">
+    <i class="bi bi-search" aria-hidden="true"></i>
+    <input id="rp-q" type="text" autocomplete="off" spellcheck="false" placeholder="Buscar contribuyente por nombre o NIT…"
+           role="combobox" aria-label="Buscar contribuyente" aria-expanded="false" aria-controls="rp-sugerencias" aria-autocomplete="list">
+    <button type="button" class="rp-search-x" id="rp-q-x" hidden aria-label="Limpiar búsqueda">✕</button>
+    <ul class="rp-sug" id="rp-sugerencias" role="listbox" hidden></ul>
+  </div>
+
   <!-- Una sola fila de filtros, encima de todo lo que filtran -->
   <div class="rp-filters" id="rp-filters" role="group" aria-label="Filtros"></div>
 
   <section class="rp-kpis" id="rp-kpis" aria-label="Resumen"></section>
 
   <div class="rp-grid" id="rp-grid">
+    <article class="rp-card rp-wide" id="card-detalle" hidden>
+      <header class="rp-card-h">
+        <div><h2 id="detalle-titulo">Declaraciones</h2><p class="rp-hint" id="detalle-hint"></p></div>
+      </header>
+      <div class="rp-body" id="detalle-body"></div>
+    </article>
+
     <article class="rp-card rp-wide" id="card-tiempo">
       <header class="rp-card-h">
         <div><h2 id="tiempo-titulo">Declaraciones en el tiempo</h2><p class="rp-hint" id="tiempo-hint">Haz clic en una barra para filtrar por ese período.</p></div>

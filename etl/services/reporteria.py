@@ -10,9 +10,11 @@ Filtros (todos opcionales): proceso (id), ano, pago (PAGADO | PENDIENTE),
 cxc (estado en el sistema de información, o SIN_CARGAR), periodo (clave del eje de tiempo).
 """
 import re
+import unicodedata
 from collections import defaultdict
 from urllib.parse import urlencode
 
+from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
 
@@ -49,6 +51,11 @@ def etiqueta_periodo(clave):
     return f"{_MESES[int(resto) - 1]} {ano}"
 
 
+def _sin_tildes(texto):
+    t = unicodedata.normalize("NFD", str(texto or "")).encode("ascii", "ignore").decode()
+    return t.lower().strip()
+
+
 def _nombre(razon, nombre, apellido, documento):
     return (razon or f"{nombre or ''} {apellido or ''}".strip() or documento or "Sin nombre").strip()
 
@@ -71,9 +78,9 @@ def calcular(municipio, filtros):
     raw = (EncabezadoCXC.objects.filter(proceso__municipio=municipio, proceso__activo=True)
            .values_list("proceso_id", "estado_pago", "estado_cxc", "total_a_pagar", "fecha_cobro",
                         "datos_extra__ano", "datos_extra__periodo", "razon_social", "primer_nombre",
-                        "primer_apellido", "numero_documento"))
+                        "primer_apellido", "numero_documento", "consecutivo_cxc"))
     filas = []
-    for pid, ep, ec, total, fecha, ano, periodo, razon, nom, ape, doc in raw.iterator(chunk_size=5000):
+    for pid, ep, ec, total, fecha, ano, periodo, razon, nom, ape, doc, consec in raw.iterator(chunk_size=5000):
         clave = clave_periodo(codigo, fecha, ano, periodo)
         filas.append({
             "proceso": pid,
@@ -84,9 +91,13 @@ def calcular(municipio, filtros):
             "ano": clave[:4] if clave else None,
             "nombre": _nombre(razon, nom, ape, doc),
             "doc": doc or "",
+            "consec": consec,
+            "fecha": fecha,
         })
+        filas[-1]["buscable"] = _sin_tildes(filas[-1]["nombre"] + " " + filas[-1]["doc"])
 
-    f = {k: filtros.get(k) for k in ("proceso", "ano", "pago", "cxc", "periodo")}
+    f = {k: filtros.get(k) for k in ("proceso", "ano", "pago", "cxc", "periodo", "doc", "q")}
+    palabras = _sin_tildes(f["q"]).split() if f["q"] else []
 
     def aplicar(excluir=()):
         def ok(r):
@@ -94,7 +105,9 @@ def calcular(municipio, filtros):
                     and (("ano" in excluir) or not f["ano"] or r["ano"] == f["ano"])
                     and (("pago" in excluir) or not f["pago"] or r["pago"] == f["pago"])
                     and (("cxc" in excluir) or not f["cxc"] or r["cxc"] == f["cxc"])
-                    and (("periodo" in excluir) or not f["periodo"] or r["periodo"] == f["periodo"]))
+                    and (("periodo" in excluir) or not f["periodo"] or r["periodo"] == f["periodo"])
+                    and (not f["doc"] or r["doc"] == f["doc"])
+                    and all(w in r["buscable"] for w in palabras))
         return [r for r in filas if ok(r)]
 
     activas = aplicar()
@@ -179,9 +192,28 @@ def calcular(municipio, filtros):
         q["estado_pago"] = "PAGO REALIZADO" if f["pago"] == "PAGADO" else "PENDIENTE"
     if f["cxc"] and f["cxc"] != SIN_CARGAR:
         q["estado"] = f["cxc"]
+    if f["doc"]:
+        q["q_num"] = f["doc"]
+    elif f["q"]:
+        q["q"] = f["q"]
     explorar = [{"nombre": p.nombre,
                  "url": reverse("dashboard", args=[p.id]) + (("?" + urlencode(q)) if q else "")}
                 for p in procesos]
+
+    # Con un contribuyente o un texto de búsqueda: sus declaraciones una por una
+    detalle = None
+    if f["doc"] or f["q"]:
+        nombres_proceso = {p.id: p.nombre for p in procesos}
+        orden = sorted(activas, key=lambda r: (r["periodo"] or "", r["consec"]), reverse=True)
+        detalle = {"total": len(orden), "filas": [{
+            "consecutivo": r["consec"], "proceso": nombres_proceso.get(r["proceso"], ""),
+            "periodo": etiqueta_periodo(r["periodo"]) if r["periodo"] else "",
+            "fecha": r["fecha"].strftime("%d/%m/%Y") if r["fecha"] else "",
+            "pago": r["pago"], "cxc": r["cxc"], "valor": r["valor"], "nombre": r["nombre"], "doc": r["doc"],
+        } for r in orden[:150]]}
+    contribuyente = None
+    if f["doc"] and activas:
+        contribuyente = {"nombre": activas[0]["nombre"], "doc": f["doc"]}
 
     ult = (Ejecucion.objects.filter(proceso__municipio=municipio, estado="COMPLETADO")
            .order_by("-fecha_fin").values_list("fecha_fin", flat=True).first())
@@ -190,6 +222,29 @@ def calcular(municipio, filtros):
         "municipio": {"codigo": codigo, "nombre": municipio.nombre, "tiene_csv": tiene_csv},
         "filtros": f, "anos": anos, "kpi": kpi, "pago": pago, "cxc": cxc, "cruce": cruce,
         "tiempo": tiempo, "procesos": lista_procesos, "top_pendientes": top_pend,
-        "explorar": explorar,
+        "explorar": explorar, "detalle": detalle, "contribuyente": contribuyente,
         "actualizado": timezone.localtime(ult).strftime("%d/%m/%Y %H:%M") if ult else None,
     }
+
+
+def buscar(municipio, texto, limite=8):
+    """Sugerencias para el buscador: contribuyentes (por documento) que coinciden con el texto."""
+    texto = (texto or "").strip()
+    if len(texto) < 2:
+        return []
+    qs = (EncabezadoCXC.objects.filter(proceso__municipio=municipio, proceso__activo=True)
+          .filter(Q(razon_social__icontains=texto) | Q(primer_nombre__icontains=texto)
+                  | Q(primer_apellido__icontains=texto) | Q(numero_documento__icontains=texto))
+          .values_list("numero_documento", "razon_social", "primer_nombre", "primer_apellido",
+                       "estado_pago", "total_a_pagar")[:5000])
+    acc = {}
+    for doc, razon, nom, ape, ep, total in qs:
+        if not doc:
+            continue
+        a = acc.setdefault(doc, {"documento": doc, "nombre": _nombre(razon, nom, ape, doc),
+                                 "n": 0, "pendientes": 0, "valor_pendiente": 0.0})
+        a["n"] += 1
+        if normalizar_pago(ep) == "PENDIENTE":
+            a["pendientes"] += 1
+            a["valor_pendiente"] += float(total or 0)
+    return sorted(acc.values(), key=lambda a: (-a["n"], a["nombre"]))[:limite]
