@@ -145,4 +145,25 @@ class Command(BaseCommand):
             except Municipio.DoesNotExist:
                 pass
 
+        # Sabaneta — solo Publicidad Exterior Visual. Las declaraciones vienen de GOBS;
+        # el Excel es el respaldo si GOBS_PG_ENABLED=False. Los procesos genéricos
+        # (autorretención, retención, declare y pague) no tienen procesador para Sabaneta.
+        try:
+            sabaneta = Municipio.objects.get(codigo="SABANETA")
+            Proceso.objects.filter(
+                municipio=sabaneta, codigo__in=["CXC_AUTO", "CXC_RETE", "DECLAREYPAGUE"]
+            ).update(activo=False)
+            proceso, _ = Proceso.objects.update_or_create(
+                municipio=sabaneta, codigo="PUBLICIDAD_EXTERIOR",
+                defaults={"nombre": "Publicidad Exterior Visual",
+                          "descripcion": "Proceso CXC de Publicidad Exterior Visual",
+                          "orden": 1, "activo": True})
+            InsumoDefinicion.objects.update_or_create(
+                proceso=proceso, nombre_campo="declaraciones",
+                defaults={"nombre": "Declaraciones Publicidad Exterior Visual",
+                          "extensiones": ".xlsx", "orden": 1, "tipo": "CARGUE", "requerido": True})
+            self.stdout.write(f"  Proceso Sabaneta: {proceso}")
+        except Municipio.DoesNotExist:
+            pass
+
         self.stdout.write(self.style.SUCCESS("\nInicialización completada."))
