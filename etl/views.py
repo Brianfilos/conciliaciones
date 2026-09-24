@@ -33,7 +33,7 @@ def _parse_fecha(valor):
         return None
 
 
-def _run_motor(ejecucion_id, archivos):
+def _run_motor(ejecucion_id, archivos, filtros=None):
     """Ejecuta el motor ETL en un hilo separado."""
     import django
     from etl.models import Ejecucion as Ej
@@ -41,7 +41,7 @@ def _run_motor(ejecucion_id, archivos):
     try:
         ejecucion = Ej.objects.get(id=ejecucion_id)
         motor = M(ejecucion)
-        motor.ejecutar(archivos)
+        motor.ejecutar(archivos, filtros)
     except Exception:
         pass
 
@@ -91,7 +91,9 @@ class EjecutarProcesoView(View):
                 archivos[insumo.nombre_campo] = ins_ej.archivo.path
 
         # Lanzar en background y redirigir a pantalla de progreso
-        t = threading.Thread(target=_run_motor, args=(ejecucion.id, archivos), daemon=True)
+        filtros = {"desde": form.cleaned_data.get("fecha_desde"),
+                   "hasta": form.cleaned_data.get("fecha_hasta")}
+        t = threading.Thread(target=_run_motor, args=(ejecucion.id, archivos, filtros), daemon=True)
         t.start()
         return redirect("ejecutar_progreso", ejecucion_id=ejecucion.id)
 
@@ -622,6 +624,38 @@ class ExportarView(View):
                 lines.append("|".join("" if v is None else str(v) for v in row))
             response.write("\n".join(lines))
             return response
+
+        # ── Sabaneta: reporte plano de publicidad exterior visual ─────────────
+        if proceso.municipio.codigo == "SABANETA":
+            from etl.services.exportador_sabaneta import build_rows
+            headers, data = build_rows(proceso, {
+                "q": q, "q_consec": q_consec, "q_num": q_num, "q_nombre": q_nombre,
+                "fecha_desde": fecha_desde, "fecha_hasta": fecha_hasta,
+                "estado_pago": estado_pago_filtro,
+            })
+            if fmt == "csv":
+                response = HttpResponse(content_type="text/csv; charset=utf-8")
+                response["Content-Disposition"] = f'attachment; filename="{nombre_base}.csv"'
+                response.write("﻿")
+                writer = csv.writer(response)
+                writer.writerow(headers)
+                writer.writerows([["" if v is None else v for v in row] for row in data])
+                return response
+            import openpyxl
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "datos"
+            ws.append(headers)
+            for row in data:
+                ws.append(row)
+            buf = io.BytesIO()
+            wb.save(buf)
+            buf.seek(0)
+            resp = HttpResponse(
+                buf.read(),
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            resp["Content-Disposition"] = f'attachment; filename="{nombre_base}.xlsx"'
+            return resp
 
         # ── Envigado: TXT intercalado (encabezado + detalles por consecutivo) ──
         if proceso.municipio.codigo == "ENVIGADO" and fmt == "txt":

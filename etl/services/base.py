@@ -28,6 +28,7 @@ class ProcesadorBase:
     CONCEPTO_IND_EXON = "10167"
     CONCEPTO_COM_EXON = "10166"
     CONCEPTO_SER_EXON = "10168"
+    PREFIJO_RENGLON_TARJETA = ("17.1", "171")
 
     def __init__(self, proceso_codigo, archivos, municipio):
         self.proceso_codigo = proceso_codigo
@@ -51,6 +52,13 @@ class ProcesadorBase:
         raise ValueError(f"Proceso desconocido: {self.proceso_codigo}")
 
     # ── helpers ──────────────────────────────────────────────────────────────
+
+    def _leer(self, campo):
+        """Insumo tabular: DataFrame (viene de GOBS) o ruta a un Excel subido."""
+        origen = self.archivos[campo]
+        if isinstance(origen, pd.DataFrame):
+            return origen.copy()
+        return pd.read_excel(origen)
 
     def _cxc_id(self, serie):
         def _fmt(v):
@@ -216,17 +224,22 @@ class ProcesadorBase:
         import unicodedata
         return unicodedata.normalize("NFD", str(s)).encode("ascii", "ignore").decode().upper()
 
-    def _extra(self, dec, substr, concepto, also=None):
+    def _extra(self, dec, substr, concepto, also=None, prefijo=None):
         # Busca la columna numérica que contiene substr (sin tildes).
         # Excluye columnas de subtotal/total-agregado para no tomar la columna equivocada
         # (ej. '22. Subtotal Autorretenciones, Sanciones e Intereses' cuando se busca "SANCION").
         # Si hay varias, descarta las que resulten completamente no-numéricas (ej. "Tipo de sanción").
         # also: término adicional que TAMBIÉN debe estar en el nombre de la columna (ej. "RETENIDO").
+        # prefijo: el nombre debe empezar por alguno de estos renglones (ej. ("17.1", "171")).
+        #   Sirve cuando el nombre no basta para distinguir (GOBS trunca "Valor Retenido").
+        # "PROFESIONAL" se excluye siempre: "Tarjeta de profesional" no es un valor en pesos.
         candidates = [
             c for c in dec.columns
             if self._norm(substr) in self._norm(c)
             and "SUBTOTAL" not in self._norm(c)
+            and "PROFESIONAL" not in self._norm(c)
             and (also is None or self._norm(also) in self._norm(c))
+            and (prefijo is None or self._norm(c).startswith(tuple(prefijo)))
         ]
         col = None
         for c in candidates:
@@ -266,7 +279,7 @@ class ProcesadorBase:
     # ── AUTO ─────────────────────────────────────────────────────────────────
 
     def _auto(self):
-        dec = pd.read_excel(self.archivos["declaraciones"])
+        dec = self._leer("declaraciones")
         cname = self._resolve_consec_col(dec)
         dec["consecutivo_cxc"] = self._cxc_id(dec[cname])
         dec = self._base_rename(dec, cname)
@@ -291,7 +304,7 @@ class ProcesadorBase:
         dec = self._merge_cxc(dec)
         df_enc = self._enc(dec)
 
-        act = pd.read_excel(self.archivos["actividades"])
+        act = self._leer("actividades")
         cc = next((c for c in act.columns if "CIIU" in c.upper() or "CODIGO" in c.upper()), None)
         if cc:
             act["codigo"] = act[cc].astype(str).apply(
@@ -348,7 +361,7 @@ class ProcesadorBase:
     # ── RETE ─────────────────────────────────────────────────────────────────
 
     def _rete(self):
-        dec = pd.read_excel(self.archivos["declaraciones"])
+        dec = self._leer("declaraciones")
         cname = self._resolve_consec_col(dec)
         dec["consecutivo_cxc"] = self._cxc_id(dec[cname])
         dec = self._base_rename(dec, cname)
@@ -365,10 +378,10 @@ class ProcesadorBase:
         df_enc = self._enc(dec)
         # Intentar con "RETENIDO" primero (para no tomar Base Gravable); si no existe,
         # caer en búsqueda solo por tipo de actividad (Copa puede no tener esa palabra).
-        def _rete_extra(substr, concepto, also_tar=False):
-            r = self._extra(dec, substr, concepto, also="RETENIDO")
+        def _rete_extra(substr, concepto, prefijo=None):
+            r = self._extra(dec, substr, concepto, also="RETENIDO", prefijo=prefijo)
             if r is None:
-                r = self._extra(dec, substr, concepto)
+                r = self._extra(dec, substr, concepto, prefijo=prefijo)
             return r
 
         extras = [e for e in [
@@ -378,7 +391,8 @@ class ProcesadorBase:
             self._extra(dec, "SANCION", self.CONCEPTO_SAN),
             self._extra(dec, "INTERES", self.CONCEPTO_INT),
             self._extra(dec, "EXCESO",  self.CONCEPTO_EXC_RETE),
-            _rete_extra("TARJETA",    self.CONCEPTO_TAR),
+            # Renglón 17.1 (Excel) / 171 (GOBS) = valor retenido; el 17 es la base gravable.
+            _rete_extra("TARJETA",    self.CONCEPTO_TAR, prefijo=self.PREFIJO_RENGLON_TARJETA),
         ] if e is not None]
         df_det = pd.concat(extras, ignore_index=True) if extras else self._empty_det()
         return df_enc, df_det
@@ -386,7 +400,7 @@ class ProcesadorBase:
     # ── DECLARE Y PAGUE ───────────────────────────────────────────────────────
 
     def _declare(self):
-        dec = pd.read_excel(self.archivos["declaraciones"])
+        dec = self._leer("declaraciones")
         cname = self._resolve_consec_col(dec)
         dec["consecutivo_cxc"] = self._cxc_id(dec[cname])
         dec = self._base_rename(dec, cname)
@@ -408,7 +422,7 @@ class ProcesadorBase:
         dec = self._merge_cxc(dec)
         df_enc = self._enc(dec)
 
-        act = pd.read_excel(self.archivos["actividades"])
+        act = self._leer("actividades")
         cc = next((c for c in act.columns if "CODIFIC" in c.upper() or "CODIGO" in c.upper()), None)
         if cc:
             act["codigo"] = act[cc].astype(str).apply(

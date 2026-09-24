@@ -52,6 +52,34 @@ class ProcesadorEnvigado:
             return self._rete()
         raise ValueError(f"Proceso desconocido para Envigado: {self.proceso_codigo}")
 
+    def _leer(self, campo):
+        """Insumo tabular: DataFrame (viene de GOBS) o ruta a un Excel subido."""
+        origen = self.archivos[campo]
+        if isinstance(origen, pd.DataFrame):
+            return origen.copy()
+        return pd.read_excel(origen)
+
+    @staticmethod
+    def _nk(s):
+        """Clave comparable: sin tildes, mayúsculas y solo letras/números."""
+        import unicodedata
+        t = unicodedata.normalize("NFD", str(s)).encode("ascii", "ignore").decode().upper()
+        return re.sub(r"[^A-Z0-9]", "", t)
+
+    def _col(self, df, *nombres):
+        """Columna cuyo nombre empieza por alguno de `nombres`, ignorando tildes y signos
+        (el Excel dice "23. TOTAL A PAGAR ($ COP)" y GOBS "23. TOTAL A PAGAR COP")."""
+        for n in nombres:
+            k = self._nk(n)
+            for c in df.columns:
+                if self._nk(c).startswith(k):
+                    return c
+        return None
+
+    def _get(self, df, *nombres, default=None):
+        c = self._col(df, *nombres)
+        return df[c] if c else default
+
     def _tipo_ciiu(self, codigo):
         try:
             return CIIUMunicipio.objects.get(
@@ -69,8 +97,8 @@ class ProcesadorEnvigado:
 
     # ── AUTORRETENCIÓN ────────────────────────────────────────────────────────
     def _auto(self):
-        dec = pd.read_excel(self.archivos["declaraciones"])
-        act = pd.read_excel(self.archivos["actividades"])
+        dec = self._leer("declaraciones")
+        act = self._leer("actividades")
 
         dec.columns = [c.strip() for c in dec.columns]
         act.columns = [c.strip() for c in act.columns]
@@ -83,8 +111,10 @@ class ProcesadorEnvigado:
         dec["consecutivo_original"] = dec["consecutivo_cxc"]
 
         dec["fecha_cobro"]      = self._fecha(dec.get("Fecha Pago"))
-        dec["fecha_vencimiento"] = self._fecha(dec.get("Fecha de presentación"))
-        dec["total_a_pagar"]    = dec.get("23. TOTAL A PAGAR ($ COP)")
+        col_pres = self._col(dec, "Fecha de presentacion")
+        col_tot  = self._col(dec, "23. TOTAL A PAGAR")
+        dec["fecha_vencimiento"] = self._fecha(dec.get(col_pres))
+        dec["total_a_pagar"]    = dec.get(col_tot)
         dec["estado_pago"]      = dec.get("Estado Pago", pd.Series([""] * len(dec))).fillna("").astype(str).str.replace("✓ ", "", regex=False).str.replace("✓", "", regex=False).str.strip()
         dec["estado_cxc"]       = ""  # Sin archivo CXC
 
@@ -94,17 +124,17 @@ class ProcesadorEnvigado:
         dec["descripcion"] = "AUTORRETENCION " + periodo.astype(str) + " " + ano.astype(float).astype(int).astype(str) + " Radicado No. " + consec
 
         # Guardar sanciones e intereses en datos_extra para el TXT
-        san_col = "20.1 Valor sanción ($ COP)"
-        int_col = "21. Intereses por mora ($ COP)"
-        dec["_san"] = dec.get(san_col, 0).fillna(0)
-        dec["_int"] = dec.get(int_col, 0).fillna(0)
+        san_col = self._col(dec, "20.1 Valor sancion")
+        int_col = self._col(dec, "21. Intereses por mora")
+        dec["_san"] = dec[san_col].fillna(0) if san_col else 0
+        dec["_int"] = dec[int_col].fillna(0) if int_col else 0
 
         enc_cols = ["consecutivo_cxc", "consecutivo_original", "numero_documento",
                     "razon_social", "fecha_cobro", "fecha_vencimiento",
                     "descripcion", "total_a_pagar", "estado_pago", "estado_cxc"]
 
         # Map NIT y Nombre
-        dec["numero_documento"] = dec.get("Cédula/NIT propietario", dec.get("Cedula/NIT propietario", "")).astype(str)
+        dec["numero_documento"] = dec[self._col(dec, "Cedula/NIT propietario")].astype(str)             if self._col(dec, "Cedula/NIT propietario") else ""
         dec["razon_social"]     = dec.get("Nombre productor", "").fillna("").astype(str)
 
         df_enc = dec[[c for c in enc_cols if c in dec.columns]].copy()
@@ -114,7 +144,7 @@ class ProcesadorEnvigado:
             return {
                 "periodo":      str(row.get("1. Periodo declarado", "")),
                 "ano":          str(int(row.get("1.1 Año", 0) or 0)),
-                "fecha_pres":   self._fmt_fecha(row.get("Fecha de presentación")),
+                "fecha_pres":   self._fmt_fecha(row.get(col_pres)),
                 "fecha_pago":   self._fmt_fecha(row.get("Fecha Pago")),
                 "san":          float(row.get("_san", 0) or 0),
                 "intereses":    float(row.get("_int", 0) or 0),
@@ -187,17 +217,20 @@ class ProcesadorEnvigado:
 
     # ── RETENCIÓN ICA ─────────────────────────────────────────────────────────
     def _rete(self):
-        dec = pd.read_excel(self.archivos["declaraciones"])
+        dec = self._leer("declaraciones")
         dec.columns = [c.strip() for c in dec.columns]
 
         consec_col = "Consecutivo 1" if "Consecutivo 1" in dec.columns else "Consecutivo"
         dec["consecutivo_cxc"]      = dec[consec_col].astype(str).str.strip()
         dec["consecutivo_original"] = dec["consecutivo_cxc"]
-        dec["numero_documento"]     = dec.get("Cédula/NIT propietario", dec.get("Cedula/NIT propietario", "")).astype(str)
+        col_ced  = self._col(dec, "Cedula/NIT propietario")
+        col_pres = self._col(dec, "Fecha de presentacion")
+        col_tot  = self._col(dec, "23. Total a pagar")
+        dec["numero_documento"]     = dec[col_ced].astype(str) if col_ced else ""
         dec["razon_social"]         = dec.get("Nombre productor", "").fillna("").astype(str)
         dec["fecha_cobro"]          = self._fecha(dec.get("Fecha Pago"))
-        dec["fecha_vencimiento"]    = self._fecha(dec.get("Fecha de presentación"))
-        dec["total_a_pagar"]        = dec.get("23. Total a pagar ($ COP)", dec.get("23. TOTAL A PAGAR ($ COP)"))
+        dec["fecha_vencimiento"]    = self._fecha(dec.get(col_pres))
+        dec["total_a_pagar"]        = dec.get(col_tot)
         dec["estado_pago"]          = dec.get("Estado Pago", pd.Series([""] * len(dec))).fillna("").astype(str).str.replace("✓ ", "", regex=False).str.replace("✓", "", regex=False).str.strip()
         dec["estado_cxc"]           = ""
 
@@ -214,9 +247,9 @@ class ProcesadorEnvigado:
             return {
                 "periodo":    str(row.get("1. Periodo declarado", "")),
                 "ano":        str(int(row.get("1.1 Año", 0) or 0)),
-                "fecha_pres": self._fmt_fecha(row.get("Fecha de presentación")),
+                "fecha_pres": self._fmt_fecha(row.get(col_pres)),
                 "fecha_pago": self._fmt_fecha(row.get("Fecha Pago")),
-                "total":      (lambda v: float(v) if v is not None and str(v) not in ("", "nan", "NaN") else 0)(row.get("23. Total a pagar ($ COP)", row.get("23. TOTAL A PAGAR ($ COP)", 0))),
+                "total":      (lambda v: float(v) if v is not None and str(v) not in ("", "nan", "NaN") else 0)(row.get(col_tot, 0)),
             }
         df_enc["datos_extra"] = dec.apply(make_extra, axis=1)
 

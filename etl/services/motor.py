@@ -2,6 +2,7 @@ import traceback
 from django.utils import timezone
 from django.db import transaction
 from etl.models import EncabezadoCXC, DetalleCXC
+from etl.services import gobs_pg
 import pandas as pd
 
 
@@ -11,10 +12,11 @@ class MotorETL:
         self.proceso = ejecucion.proceso
         self.municipio = self.proceso.municipio
 
-    def ejecutar(self, archivos):
+    def ejecutar(self, archivos, filtros=None):
         self.ejecucion.estado = "EJECUTANDO"
         self.ejecucion.save()
         try:
+            archivos = self._completar_desde_gobs(archivos, filtros or {})
             processor = self._get_processor(archivos)
             df_enc, df_det = processor.procesar()
             self._guardar(df_enc, df_det)
@@ -25,6 +27,20 @@ class MotorETL:
         finally:
             self.ejecucion.fecha_fin = timezone.now()
             self.ejecucion.save()
+
+    def _completar_desde_gobs(self, archivos, filtros):
+        """Si el proceso tiene fuente en GOBS, trae declaraciones/actividades de PostgreSQL.
+        Un archivo subido a mano tiene prioridad sobre el dato de GOBS."""
+        fuente = gobs_pg.fuente_para(self.municipio.codigo, self.proceso.codigo)
+        if fuente is None:
+            return archivos
+        datos, meta = gobs_pg.cargar(fuente, filtros.get("desde"), filtros.get("hasta"))
+        rango = " a ".join(str(f) for f in (filtros.get("desde"), filtros.get("hasta")) if f) or "todo"
+        nota = (f"[Origen GOBS PostgreSQL: {meta['declaraciones']} declaraciones ({rango}) | "
+                f"datos cargados en GOBS al {meta['datos_al']}]")
+        self.ejecucion.error_log = nota
+        self.ejecucion.save(update_fields=["error_log"])
+        return {**datos, **archivos}
 
     def _get_processor(self, archivos):
         cod  = self.municipio.codigo
@@ -41,6 +57,9 @@ class MotorETL:
         elif cod == "ENVIGADO":
             from etl.services.envigado import ProcesadorEnvigado
             return ProcesadorEnvigado(proc, archivos, self.municipio)
+        elif cod == "SABANETA":
+            from etl.services.sabaneta import ProcesadorSabaneta
+            return ProcesadorSabaneta(proc, archivos, self.municipio)
         else:
             raise NotImplementedError(f"No hay procesador para municipio: {cod}")
 

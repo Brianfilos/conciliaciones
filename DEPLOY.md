@@ -63,6 +63,23 @@ python -c "from django.core.management.utils import get_random_secret_key; print
 
 ---
 
+## 5b. Conexión a GOBS (PostgreSQL de solo lectura)
+
+Las declaraciones y actividades de autorretención, retención ICA, Declare y Pague (según
+municipio) y publicidad exterior visual (Sabaneta) se leen directo de la base GOBS en AWS RDS
+en lugar de subir Excel. El CSV de CXC sigue subiéndose a mano.
+
+1. Pedir al equipo GOBS que autorice la **IP pública del VPS** en el RDS (sin esto la
+   conexión se queda esperando y la ejecución termina en ERROR).
+2. Completar en el `.env` las variables `GOBS_PG_*` (ver `.env.example`) y poner
+   `GOBS_PG_ENABLED=True`. Los datos de conexión están en el manual ODBC de GOBS.
+3. `pip install -r requirements.txt` (agrega `psycopg2-binary`) y reiniciar Gunicorn.
+4. `python manage.py inicializar_datos` (crea el proceso de publicidad exterior de Sabaneta).
+
+Con `GOBS_PG_ENABLED=False` la app funciona como antes, pidiendo los Excel.
+Los datos de GOBS se actualizan cada 24 horas; cada ejecución guarda en su log la fecha
+de carga de GOBS que usó.
+
 ## 6. Inicializar la base de datos
 
 ```bash

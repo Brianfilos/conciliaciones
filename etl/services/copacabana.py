@@ -28,7 +28,7 @@ class ProcesadorCopacabana(ProcesadorBase):
 
     # ── DECLARE Y PAGUE (override para Copa) ────────────────────────────────
     def _declare(self):
-        dec = pd.read_excel(self.archivos["declaraciones"])
+        dec = self._leer("declaraciones")
         cname = self._resolve_consec_col(dec)
         dec["consecutivo_cxc"] = self._cxc_id(dec[cname])
         dec = self._base_rename(dec, cname)
@@ -54,7 +54,7 @@ class ProcesadorCopacabana(ProcesadorBase):
         df_enc = self._enc(dec)
 
         # ── Actividades (ICA por CIIU) ─────────────────────────────────────
-        act = pd.read_excel(self.archivos["actividades"])
+        act = self._leer("actividades")
         cc = next((c for c in act.columns if "CODIFIC" in c.upper() or "CODIGO" in c.upper()), None)
         if cc:
             act["codigo"] = act[cc].astype(str).apply(

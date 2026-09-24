@@ -86,7 +86,7 @@ class ProcesadorEstrella(ProcesadorBase):
 
     def _declare(self):
         cname = "Consecutivo 2"   # col radicado: descripción y merge de actividades
-        dec = pd.read_excel(self.archivos["declaraciones"])
+        dec = self._leer("declaraciones")
         # El consecutivo_cxc se construye desde Consecutivo 1 (igual que en el py original)
         dec["consecutivo_cxc"] = self._cxc_id(dec["Consecutivo 1"])
         dec = self._base_rename(dec, cname)
@@ -106,7 +106,7 @@ class ProcesadorEstrella(ProcesadorBase):
         df_enc = self._enc(dec)
 
         # ── Actividades (ICA por CIIU) ────────────────────────────────────────
-        act = pd.read_excel(self.archivos["actividades"])
+        act = self._leer("actividades")
         cc = next((c for c in act.columns if "CODIFIC" in c.upper() or "CODIGO" in c.upper()), None)
         if cc:
             act["codigo"] = act[cc].fillna("").astype(str).apply(
@@ -270,7 +270,7 @@ class ProcesadorEstrella(ProcesadorBase):
         la Base Gravable (que aparece primero y tiene valores mucho más grandes).
         Se usa also="RETENIDO" para forzar la selección de la columna correcta.
         """
-        dec = pd.read_excel(self.archivos["declaraciones"])
+        dec = self._leer("declaraciones")
         cname = self._resolve_consec_col(dec)
         dec["consecutivo_cxc"] = self._cxc_id(dec[cname])
         dec = self._base_rename(dec, cname)
@@ -296,7 +296,8 @@ class ProcesadorEstrella(ProcesadorBase):
             self._extra(dec, "SANCION",    self.CONCEPTO_SAN),
             self._extra(dec, "INTERES",    self.CONCEPTO_INT),
             self._extra(dec, "EXCESO",     self.CONCEPTO_EXC_RETE),
-            self._extra(dec, "TARJETA",    self.CONCEPTO_TAR),
+            # Renglón 17.1 = valor retenido (el 17 es la base gravable, no debe cobrarse)
+            self._extra(dec, "TARJETA",    self.CONCEPTO_TAR, prefijo=self.PREFIJO_RENGLON_TARJETA),
         ] if e is not None]
         df_det = pd.concat(extras, ignore_index=True) if extras else self._empty_det()
         return df_enc, df_det

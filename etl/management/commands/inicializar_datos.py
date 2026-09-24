@@ -100,7 +100,7 @@ class Command(BaseCommand):
         except Municipio.DoesNotExist:
             pass
 
-        # Caldas y Sabaneta — mismos procesos sin cxc_csv
+        # Caldas — mismos procesos sin cxc_csv
         procesos_basicos = [
             {
                 "codigo": "CXC_AUTO", "nombre": "Autorretención",
@@ -126,7 +126,7 @@ class Command(BaseCommand):
                 ]
             },
         ]
-        for cod in ["CALDAS", "SABANETA"]:
+        for cod in ["CALDAS"]:
             try:
                 municipio = Municipio.objects.get(codigo=cod)
                 for pdata in procesos_basicos:

@@ -41,3 +41,6 @@ backups/
 .DS_Store
 Thumbs.db
 *.swp
+
+# Manual ODBC con credenciales de la base GOBS en texto plano
+Manual*ODBC*.pdf

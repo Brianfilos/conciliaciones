@@ -22,6 +22,13 @@
 
         <form method="post" enctype="multipart/form-data" id="ejecutar-form">
           {% csrf_token %}
+          {% if form.usa_gobs %}
+          <div class="alert alert-info small">
+            <i class="bi bi-database-check me-1"></i>
+            Las declaraciones y actividades se leen directamente de <strong>GOBS</strong>
+            (se actualizan cada 24 horas). Solo debes subir el archivo de CXC.
+          </div>
+          {% endif %}
           {% for field in form %}
           <div class="mb-3">
             <label class="form-label fw-semibold small">{{ field.label }}</label>

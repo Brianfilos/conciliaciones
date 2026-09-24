@@ -121,6 +121,13 @@ class ProcesadorCaldas:
         self.archivos = archivos
         self.municipio = municipio
 
+    def _leer(self, campo):
+        """Insumo tabular: DataFrame (viene de GOBS) o ruta a un Excel subido."""
+        origen = self.archivos[campo]
+        if isinstance(origen, pd.DataFrame):
+            return origen.copy()
+        return pd.read_excel(origen)
+
     def procesar(self):
         if self.proceso_codigo == "CXC_AUTO":
             return self._auto()
@@ -181,7 +188,8 @@ class ProcesadorCaldas:
                            or ("NIT" in c.upper() and "PROPIET" in c.upper())
                            or ("DULA" in c.upper() and "NIT" in c.upper())), None)
         dir_col    = next((c for c in dec.columns if "IFICACI" in c.upper() and "DIR" in c.upper()), None)
-        tel_col    = next((c for c in dec.columns if "VIL" in c.upper() or "LEFONO" in c.upper()), None)
+        tel_col    = (next((c for c in dec.columns if "VIL" in c.upper()), None)
+                      or next((c for c in dec.columns if "LEFONO" in c.upper()), None))
         email_col  = next((c for c in dec.columns if "MAIL" in c.upper() or "CORREO" in c.upper()), None)
         razon_col  = next((c for c in dec.columns if "RAZON" in c.upper() or "ESTABLECIMIENTO" in c.upper()), None)
 
@@ -272,8 +280,8 @@ class ProcesadorCaldas:
     # ── AUTO ─────────────────────────────────────────────────────────────────
 
     def _auto(self):
-        dec = pd.read_excel(self.archivos["declaraciones"])
-        act = pd.read_excel(self.archivos["actividades"])
+        dec = self._leer("declaraciones")
+        act = self._leer("actividades")
 
         df_enc = self._build_enc(dec)
 
@@ -358,7 +366,7 @@ class ProcesadorCaldas:
     # ── RETE ─────────────────────────────────────────────────────────────────
 
     def _rete(self):
-        dec = pd.read_excel(self.archivos["declaraciones"])
+        dec = self._leer("declaraciones")
         df_enc = self._build_enc(dec)
         det_rows = []
 
@@ -407,7 +415,7 @@ class ProcesadorCaldas:
         df_det = pd.DataFrame(det_rows) if det_rows else self._empty_det()
 
         # descripcion y total
-        ano_col = _col(dec, "1. A")
+        ano_col = _col(dec, "1.1 A", "1. A")
         per_col = _col(dec, "Periodo")
         for idx, row in df_enc.iterrows():
             consec = row["consecutivo_cxc"]
@@ -426,8 +434,8 @@ class ProcesadorCaldas:
     # ── DECLARE Y PAGUE ───────────────────────────────────────────────────────
 
     def _declare(self):
-        dec = pd.read_excel(self.archivos["declaraciones"])
-        act = pd.read_excel(self.archivos["actividades"])
+        dec = self._leer("declaraciones")
+        act = self._leer("actividades")
 
         df_enc = self._build_enc(dec)
         det_rows = []
