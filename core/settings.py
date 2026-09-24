@@ -14,6 +14,12 @@ SECRET_KEY = config('SECRET_KEY')
 DEBUG = config('DEBUG', default=False, cast=bool)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1', cast=Csv())
 
+# Detrás de Nginx con HTTPS: Django debe saber que la petición original era https y
+# confiar en el origen del dominio, si no el login falla con "CSRF verification failed".
+# Ej.: CSRF_TRUSTED_ORIGINS=https://filosdev.com,https://www.filosdev.com
+CSRF_TRUSTED_ORIGINS = config('CSRF_TRUSTED_ORIGINS', default='', cast=Csv())
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
