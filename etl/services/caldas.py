@@ -179,7 +179,7 @@ class ProcesadorCaldas:
     def _build_enc(self, dec):
         """Construye el DataFrame de encabezado a partir del df de declaraciones."""
         # Detectar columnas por keyword (robusto ante encoding)
-        ano_col    = _col(dec, "1.1") or _col(dec, "AO GRAVABLE", "ANO GRAVABLE")
+        ano_col    = _col(dec, "1.1") or _col(dec, "AÑO GRAVABLE", "AO GRAVABLE", "ANO GRAVABLE")
         per_col    = next((c for c in dec.columns if "PERIODO" in c.upper() and "1." in c), None)
         tipo_col   = next((c for c in dec.columns if "2-3" in c or "TIPO DE DECLAR" in c.upper() or "OPCI" in c.upper()), None)
         nat_col    = next((c for c in dec.columns if "ATUR" in c.upper()), None)   # Naturaleza jurídica

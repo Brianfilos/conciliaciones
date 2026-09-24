@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Reportería{% endblock %}
+{% block breadcrumb %} &rsaquo; <span>Reportería</span>{% endblock %}
+{% block tab_reporteria %}active {% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{% static 'css/reporteria.css' %}">{% endblock %}
+
+{% block content %}
+{% if not datos %}
+  <div class="alert alert-light border">No hay un municipio asignado a tu usuario.</div>
+{% else %}
+<div class="rp" id="rp" data-url="{% url 'reporteria_datos' %}" data-municipio="{{ datos.municipio.codigo }}">
+
+  <div class="rp-head">
+    <div>
+      <h1 class="rp-title">Reportería</h1>
+      <p class="rp-sub">{{ datos.municipio.nombre }} <span id="rp-actualizado"></span></p>
+    </div>
+    <div class="rp-head-actions">
+      {% if municipios %}
+      <select class="rp-select" id="rp-municipio" aria-label="Municipio">
+        {% for m in municipios %}<option value="{{ m.codigo }}" {% if m.codigo == datos.municipio.codigo %}selected{% endif %}>{{ m.nombre }}</option>{% endfor %}
+      </select>
+      {% endif %}
+      <nav class="rp-tabs" aria-label="Reportería">
+        <a class="on" href="{% url 'reporteria' %}">Tablero</a>
+        <a href="{% url 'historial' %}">Historial de ejecuciones</a>
+      </nav>
+    </div>
+  </div>
+
+  <!-- Una sola fila de filtros, encima de todo lo que filtran -->
+  <div class="rp-filters" id="rp-filters" role="group" aria-label="Filtros"></div>
+
+  <section class="rp-kpis" id="rp-kpis" aria-label="Resumen"></section>
+
+  <div class="rp-grid" id="rp-grid">
+    <article class="rp-card rp-wide" id="card-tiempo">
+      <header class="rp-card-h">
+        <div><h2 id="tiempo-titulo">Declaraciones en el tiempo</h2><p class="rp-hint" id="tiempo-hint">Haz clic en una barra para filtrar por ese período.</p></div>
+        <div class="rp-card-tools" id="tiempo-tools"></div>
+      </header>
+      <div class="rp-legend" id="tiempo-legend"></div>
+      <div class="rp-body" id="tiempo-body"></div>
+      <p class="rp-note" id="tiempo-note"></p>
+    </article>
+
+    <article class="rp-card" id="card-cxc" hidden>
+      <header class="rp-card-h">
+        <div><h2>Estado en el sistema de información</h2><p class="rp-hint">Según el archivo CSV de CXC cargado.</p></div>
+        <div class="rp-card-tools" id="cxc-tools"></div>
+      </header>
+      <div class="rp-body" id="cxc-body"></div>
+    </article>
+
+    <article class="rp-card" id="card-cruce" hidden>
+      <header class="rp-card-h">
+        <div><h2>Pago frente al sistema</h2><p class="rp-hint">Cruce entre el pago en GOBS y el estado en el CSV.</p></div>
+      </header>
+      <div class="rp-body" id="cruce-body"></div>
+      <p class="rp-note" id="cruce-note"></p>
+    </article>
+
+    <article class="rp-card" id="card-procesos" hidden>
+      <header class="rp-card-h">
+        <div><h2>Por proceso</h2><p class="rp-hint">Pagadas y pendientes de cada proceso.</p></div>
+        <div class="rp-card-tools" id="procesos-tools"></div>
+      </header>
+      <div class="rp-body" id="procesos-body"></div>
+    </article>
+
+    <article class="rp-card" id="card-top">
+      <header class="rp-card-h">
+        <div><h2>Mayores saldos pendientes</h2><p class="rp-hint">Contribuyentes con más valor por cobrar, según los filtros.</p></div>
+      </header>
+      <div class="rp-body" id="top-body"></div>
+    </article>
+  </div>
+
+  <div class="rp-tip" id="rp-tip" role="tooltip" hidden></div>
+</div>
+{{ datos|json_script:"rp-datos" }}
+<script src="{% static 'js/reporteria.js' %}"></script>
+{% endif %}
+{% endblock %}

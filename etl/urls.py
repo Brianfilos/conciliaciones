@@ -1,10 +1,12 @@
 from django.urls import path
-from . import views
+from . import views, views_reporteria
 
 urlpatterns = [
     path("procesos/", views.ProcesoListView.as_view(), name="proceso_list"),
     path("ejecutar/<int:proceso_id>/", views.EjecutarProcesoView.as_view(), name="ejecutar_proceso"),
     path("historial/", views.HistorialView.as_view(), name="historial"),
+    path("reporteria/", views_reporteria.ReporteriaView.as_view(), name="reporteria"),
+    path("reporteria/datos/", views_reporteria.ReporteriaDatosView.as_view(), name="reporteria_datos"),
     path("dashboard/<int:proceso_id>/", views.DashboardView.as_view(), name="dashboard"),
     path("exportar/<int:proceso_id>/", views.ExportarView.as_view(), name="exportar"),
     path("progreso/<int:ejecucion_id>/", views.ejecutar_progreso, name="ejecutar_progreso"),

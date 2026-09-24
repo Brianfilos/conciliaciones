@@ -20,7 +20,8 @@ def _entero(v):
 
 def build_rows(proceso, filtros):
     """Devuelve (HEADERS, filas) aplicando los filtros de la pantalla de consulta."""
-    qs = EncabezadoCXC.objects.filter(proceso=proceso)
+    # El reporte incluye solo las declaraciones pagadas (las pendientes se ven en el tablero).
+    qs = EncabezadoCXC.objects.filter(proceso=proceso, estado_pago__icontains="PAGO REALIZADO")
     if filtros.get("q"):
         q = filtros["q"]
         qs = (qs.filter(consecutivo_cxc__icontains=q) | qs.filter(numero_documento__icontains=q)

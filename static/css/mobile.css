@@ -1,0 +1,39 @@
+/* Adaptación para celular (≤768px). Se carga después de main.css. */
+@media (max-width: 768px) {
+  /* La barra de pestañas se ocultaba y no había cómo llegar a Reportería, Analítica o Admin:
+     ahora es una barra fija inferior, cómoda para el pulgar. */
+  .header-nav-tabs {
+    display: flex !important;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 1040;
+    margin: 0; border-radius: 0; gap: 4px; justify-content: space-around;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    background: var(--color-primario);
+    border-top: 1px solid rgba(255,255,255,.16);
+    box-shadow: 0 -6px 18px rgba(0,0,0,.2);
+  }
+  .header-nav-tab {
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 6px 4px; border-radius: 10px; font-size: .68rem; text-align: center;
+    color: rgba(255,255,255,.72);
+  }
+  .header-nav-tab i { font-size: 1.2rem !important; margin: 0 !important; }
+  body:has(.header-nav-tabs) { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }
+
+  main.container-fluid { padding-left: .75rem !important; padding-right: .75rem !important; }
+  .header-breadcrumb { max-width: 55vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Historial: el municipio es siempre el mismo; se libera espacio para lo importante */
+  .hist-table th:nth-child(2), .hist-table td:nth-child(2) { display: none; }
+  .hist-table th, .hist-table td { padding-left: .6rem !important; padding-right: .6rem !important; }
+
+  /* Tablas anchas (Analítica): se desliza de lado y la primera columna queda fija */
+  .table-responsive { -webkit-overflow-scrolling: touch; }
+  .dashboard-table { font-size: .8rem; }
+  .dashboard-table th:first-child, .dashboard-table td:first-child {
+    position: sticky; left: 0; z-index: 2; background: #fff; box-shadow: 1px 0 0 rgba(15,23,42,.08);
+  }
+  .dashboard-table thead th:first-child { z-index: 3; }
+
+  /* Botones y campos con tamaño táctil */
+  .btn, .form-control, .form-select { min-height: 40px; }
+}

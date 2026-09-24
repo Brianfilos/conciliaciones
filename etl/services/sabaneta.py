@@ -1,9 +1,10 @@
 """
 Procesador de Sabaneta — Publicidad Exterior Visual.
 
-No genera conceptos ni detalle de CXC: la salida es un reporte plano de las declaraciones
-de publicidad exterior visual pagadas, con las columnas de
-MUNICIPIOS/SABANETA/INSUMOS/FIJOS/Publicidad exterior visual.xlsx (ver exportador_sabaneta).
+No genera conceptos ni detalle de CXC. Guarda todas las declaraciones de publicidad exterior
+visual (pagadas y pendientes, para el tablero de Reportería); el reporte descargable
+(exportador_sabaneta) trae solo las pagadas, con las columnas de
+MUNICIPIOS/SABANETA/INSUMOS/FIJOS/Publicidad exterior visual.xlsx.
 
 Origen: GOBS alcaldia_de_sabaneta.uvw_f_declaracion_publicidad_exterior_visual__sabaneta
 (o un Excel con las mismas columnas).
@@ -92,8 +93,7 @@ class ProcesadorSabaneta(ProcesadorBase):
         for _, f in dec.iterrows():
             consec = _entero_texto(g(f, "consec"))
             estado = _limpio(g(f, "estado")).replace("✓", "").strip()
-            # El reporte solo incluye las declaraciones pagadas.
-            if not consec or consec.lower() == "nan" or "PAGO REALIZADO" not in estado.upper():
+            if not consec or consec.lower() == "nan":
                 continue
             fvisita = pd.to_datetime(g(f, "fvisita"), errors="coerce")
             total = pd.to_numeric(g(f, "total"), errors="coerce")
