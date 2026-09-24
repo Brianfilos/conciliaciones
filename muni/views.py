@@ -12,28 +12,6 @@ from django.db import models as models
 from .models import Municipio, CIIUMunicipio, ConceptoMunicipio
 
 
-def serve_municipio_media(request, codigo, subfolder, filename):
-    safe_codigo = os.path.basename(codigo)
-    safe_sub = os.path.basename(subfolder)
-    safe_file = os.path.basename(filename)
-    path = os.path.join(str(settings.MUNICIPIOS_ROOT), safe_codigo, safe_sub, safe_file)
-    if not os.path.exists(path):
-        raise Http404
-    mime, _ = mimetypes.guess_type(path)
-    with open(path, "rb") as f:
-        return HttpResponse(f.read(), content_type=mime or "application/octet-stream")
-
-
-def serve_gobs_media(request, filename):
-    safe_file = os.path.basename(filename)
-    path = os.path.join(str(settings.GOBS_ROOT), "IMG", safe_file)
-    if not os.path.exists(path):
-        raise Http404
-    mime, _ = mimetypes.guess_type(path)
-    with open(path, "rb") as f:
-        return HttpResponse(f.read(), content_type=mime or "application/octet-stream")
-
-
 @method_decorator(login_required, name="dispatch")
 class MunicipioHomeView(View):
     def get(self, request):

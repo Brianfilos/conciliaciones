@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Usuarios{% endblock %}
+{% block breadcrumb %} &rsaquo; <span>Usuarios</span>{% endblock %}
+{% block extra_css %}
+<style>
+  .us-head { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin-bottom:14px; }
+  .us-head h1 { font-size:1.6rem; font-weight:700; letter-spacing:-.02em; margin:0; }
+  .us-filters { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
+  .us-filters .form-control, .us-filters .form-select { max-width:250px; }
+  .us-card { background:#fff; border:1px solid var(--border-subtle); border-radius:12px; box-shadow:var(--shadow-xs); overflow:hidden; }
+  .us-table { width:100%; border-collapse:collapse; font-size:.88rem; }
+  .us-table th { text-align:left; font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; color:#64748b; padding:10px 14px; border-bottom:1px solid #e2e8f0; white-space:nowrap; }
+  .us-table td { padding:11px 14px; border-bottom:1px solid #eef2f6; vertical-align:middle; }
+  .us-table tr:last-child td { border-bottom:0; }
+  .us-name { font-weight:600; } .us-mail { color:#64748b; font-size:.8rem; }
+  .us-badge { display:inline-flex; align-items:center; gap:6px; padding:2px 10px; border-radius:99px; font-size:.75rem; font-weight:600; }
+  .us-on { background:#dcfce7; color:#166534; } .us-off { background:#fee2e2; color:#991b1b; }
+  .us-rol { background:#e0e7ff; color:#3730a3; } .us-warn { background:#fef3c7; color:#92400e; }
+  .us-acts { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+  @media (max-width: 768px) { .us-hide-sm { display:none; } .us-table td, .us-table th { padding:10px 8px; } }
+</style>
+{% endblock %}
+{% block content %}
+<div class="us-head">
+  <div>
+    <h1>Usuarios</h1>
+    <div class="text-muted small">{{ usuarios|length }} de {{ total }} usuarios</div>
+  </div>
+  <a href="{% url 'usuario_nuevo' %}" class="btn btn-primary"><i class="bi bi-person-plus me-1"></i>Nuevo usuario</a>
+</div>
+
+<form method="get" class="us-filters">
+  <input type="search" name="q" value="{{ f.q }}" class="form-control" placeholder="Buscar usuario o correo">
+  <select name="municipio" class="form-select" onchange="this.form.submit()">
+    <option value="">Todos los municipios</option>
+    {% for m in municipios %}<option value="{{ m.id }}" {% if f.municipio == m.id|stringformat:"s" %}selected{% endif %}>{{ m.nombre }}</option>{% endfor %}
+  </select>
+  <select name="rol" class="form-select" onchange="this.form.submit()">
+    <option value="">Todos los roles</option>
+    {% for v, l in roles %}<option value="{{ v }}" {% if f.rol == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
+  </select>
+  <select name="estado" class="form-select" onchange="this.form.submit()">
+    <option value="">Activos e inactivos</option>
+    <option value="activos" {% if f.estado == 'activos' %}selected{% endif %}>Solo activos</option>
+    <option value="inactivos" {% if f.estado == 'inactivos' %}selected{% endif %}>Solo inactivos</option>
+  </select>
+  <button class="btn btn-outline-secondary">Buscar</button>
+</form>
+
+<div class="us-card"><div class="table-responsive">
+<table class="us-table">
+  <thead><tr>
+    <th>Usuario</th><th class="us-hide-sm">Municipio</th><th>Rol</th><th>Estado</th><th class="us-hide-sm">Último ingreso</th><th></th>
+  </tr></thead>
+  <tbody>
+  {% for u in usuarios %}
+    <tr>
+      <td>
+        <div class="us-name">{{ u.get_full_name|default:u.username }}{% if u.is_superuser %} <span class="us-badge us-warn">Superusuario</span>{% endif %}</div>
+        <div class="us-mail">{{ u.username }} · {{ u.email }}</div>
+      </td>
+      <td class="us-hide-sm">{{ u.municipio.nombre|default:"—" }}</td>
+      <td><span class="us-badge us-rol">{{ u.get_rol_display }}</span></td>
+      <td>
+        {% if u.is_active %}<span class="us-badge us-on">Activo</span>{% else %}<span class="us-badge us-off">Inactivo</span>{% endif %}
+        {% if u.debe_cambiar_password %}<span class="us-badge us-warn" title="Debe elegir una contraseña nueva al ingresar">Clave pendiente</span>{% endif %}
+      </td>
+      <td class="us-hide-sm text-muted">{{ u.last_login|date:"d/m/Y H:i"|default:"Nunca" }}</td>
+      <td>
+        <div class="us-acts">
+          <a href="{% url 'usuario_editar' u.pk %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil me-1"></i>Editar</a>
+          <form method="post" action="{% url 'usuario_accion' u.pk %}" class="m-0"
+                onsubmit="return confirm('¿Enviar una contraseña temporal a {{ u.email }}?');">
+            {% csrf_token %}<input type="hidden" name="accion" value="temporal">
+            <button class="btn btn-sm btn-outline-primary" title="Envía una contraseña temporal al correo"><i class="bi bi-key me-1"></i>Clave</button>
+          </form>
+        </div>
+      </td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="6" class="text-center text-muted py-5">No hay usuarios con esos filtros.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div></div>
+{% endblock %}

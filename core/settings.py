@@ -42,6 +42,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'accounts.middleware.ForzarCambioPasswordMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -118,7 +119,25 @@ GOBS_ROOT = BASE_DIR / 'GOBS'
 
 # En el VPS estas carpetas se crean manualmente con los insumos del municipio activo
 
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-DEFAULT_FROM_EMAIL = 'noreply@conciliaciones.gov.co'
+# Correo saliente (recuperación de contraseña y alta de usuarios).
+# Sin EMAIL_HOST los correos solo se imprimen en el log del servidor.
+EMAIL_HOST = config('EMAIL_HOST', default='')
+if EMAIL_HOST:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+    EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+    EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+    EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+    EMAIL_TIMEOUT = 15
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='Sistema de CXC <noreply@conciliaciones.gov.co>')
+SITE_URL = config('SITE_URL', default='http://localhost:8000')
+PASSWORD_TEMPORAL_HORAS = config('PASSWORD_TEMPORAL_HORAS', default=24, cast=int)
+
+AUTHENTICATION_BACKENDS = [
+    'accounts.backends.PasswordTemporalBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

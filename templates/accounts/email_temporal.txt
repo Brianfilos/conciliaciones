@@ -1,0 +1,12 @@
+{% autoescape off %}Hola {{ usuario.get_full_name|default:usuario.username }},
+
+{% if motivo == "alta" %}Se creó tu usuario en el Sistema de Conciliación de CXC.{% else %}Recibimos una solicitud para recuperar tu acceso al Sistema de Conciliación de CXC.{% endif %}
+
+Usuario: {{ usuario.username }}
+Contraseña temporal: {{ temporal }}
+
+Ingresa aquí: {{ login_url }}
+
+Al entrar te pediremos elegir una contraseña nueva. La contraseña temporal vence en {{ horas }} horas.
+{% if motivo != "alta" %}Si no fuiste tú, ignora este mensaje: tu contraseña de siempre sigue funcionando.{% endif %}
+{% endautoescape %}

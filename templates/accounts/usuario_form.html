@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}{% if creando %}Nuevo usuario{% else %}Editar usuario{% endif %}{% endblock %}
+{% block breadcrumb %} &rsaquo; <a href="{% url 'usuarios' %}">Usuarios</a> &rsaquo; <span>{% if creando %}Nuevo{% else %}{{ u.username }}{% endif %}</span>{% endblock %}
+{% block extra_css %}
+<style>
+  .uf-wrap { max-width:1000px; margin:0 auto; display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr); gap:16px; align-items:start; }
+  .uf-card { background:#fff; border:1px solid var(--border-subtle); border-radius:12px; box-shadow:var(--shadow-xs); padding:20px; }
+  .uf-card h2 { font-size:1rem; font-weight:600; margin:0 0 14px; }
+  .uf-sec { font-size:.72rem; text-transform:uppercase; letter-spacing:.06em; color:#64748b; font-weight:600; margin:18px 0 8px; }
+  .uf-sec:first-of-type { margin-top:0; }
+  .uf-roles { display:grid; gap:8px; }
+  .uf-rol { display:flex; gap:10px; align-items:flex-start; border:1px solid #dbe2ea; border-radius:10px; padding:10px 12px; cursor:pointer; }
+  .uf-rol:has(input:checked) { border-color:#0f172a; background:#f8fafc; box-shadow:0 0 0 1px #0f172a; }
+  .uf-rol b { display:block; font-size:.9rem; } .uf-rol span { font-size:.8rem; color:#64748b; }
+  .uf-rol ul { margin:4px 0 0; padding-left:16px; font-size:.78rem; color:#64748b; }
+  .uf-err { color:#b91c1c; font-size:.8rem; margin-top:4px; }
+  @media (max-width: 860px) { .uf-wrap { grid-template-columns:minmax(0,1fr); } }
+</style>
+{% endblock %}
+{% block content %}
+<div class="uf-wrap">
+  <form method="post" class="uf-card" novalidate>
+    {% csrf_token %}
+    <h2>{% if creando %}Nuevo usuario{% else %}Datos de {{ u.username }}{% endif %}</h2>
+    {% if form.non_field_errors %}<div class="alert alert-danger small">{{ form.non_field_errors }}</div>{% endif %}
+
+    <div class="uf-sec">Datos</div>
+    <div class="row g-3">
+      <div class="col-md-6"><label class="form-label small fw-semibold">{{ form.first_name.label }}</label>{{ form.first_name }}{% for e in form.first_name.errors %}<div class="uf-err">{{ e }}</div>{% endfor %}</div>
+      <div class="col-md-6"><label class="form-label small fw-semibold">{{ form.last_name.label }}</label>{{ form.last_name }}</div>
+      <div class="col-md-6"><label class="form-label small fw-semibold">{{ form.username.label }}</label>{{ form.username }}{% for e in form.username.errors %}<div class="uf-err">{{ e }}</div>{% endfor %}</div>
+      <div class="col-md-6"><label class="form-label small fw-semibold">{{ form.email.label }}</label>{{ form.email }}{% for e in form.email.errors %}<div class="uf-err">{{ e }}</div>{% endfor %}</div>
+    </div>
+
+    <div class="uf-sec">Municipio y permisos</div>
+    <div class="mb-3"><label class="form-label small fw-semibold">{{ form.municipio.label }}</label>{{ form.municipio }}{% for e in form.municipio.errors %}<div class="uf-err">{{ e }}</div>{% endfor %}</div>
+    <div class="uf-roles">
+      {% for radio in form.rol %}
+        <label class="uf-rol" for="{{ radio.id_for_label }}">
+          {{ radio.tag }}
+          <div>
+            {% if radio.data.value == 'ADMIN' %}
+              <b>Administrador</b><span>Todo lo del operador, más:</span>
+              <ul><li>Pestaña Admin: colores, CIIU y conceptos</li><li>Limpiar datos de un proceso</li><li>Pestañas Reportería y Analítica</li></ul>
+            {% elif radio.data.value == 'OPERADOR' %}
+              <b>Operador</b><span>Ejecuta procesos y consulta los datos de su municipio.</span>
+            {% else %}
+              <b>Analítico</b><span>Solo consulta: ve los datos pero no ejecuta procesos.</span>
+            {% endif %}
+          </div>
+        </label>
+      {% endfor %}
+    </div>
+    {% for e in form.rol.errors %}<div class="uf-err">{{ e }}</div>{% endfor %}
+    <div class="form-check form-switch mt-3">
+      {{ form.is_active }}<label class="form-check-label small" for="{{ form.is_active.id_for_label }}">{{ form.is_active.label }}</label>
+      {% for e in form.is_active.errors %}<div class="uf-err">{{ e }}</div>{% endfor %}
+    </div>
+
+    {% if creando %}
+    <div class="uf-sec">Contraseña inicial</div>
+    {% for radio in form.modo_clave %}
+      <div class="form-check mb-1"><label class="form-check-label small" for="{{ radio.id_for_label }}">{{ radio.tag }} {{ radio.choice_label }}</label></div>
+    {% endfor %}
+    <div id="bloque-manual" class="mt-2" hidden>
+      {{ form.password }}{% for e in form.password.errors %}<div class="uf-err">{{ e }}</div>{% endfor %}
+      <div class="form-check mt-2"><label class="form-check-label small">{{ form.forzar_cambio }} {{ form.forzar_cambio.label }}</label></div>
+    </div>
+    {% endif %}
+
+    <div class="d-flex gap-2 mt-4">
+      <button type="submit" class="btn btn-primary">{% if creando %}Crear usuario{% else %}Guardar cambios{% endif %}</button>
+      <a href="{% url 'usuarios' %}" class="btn btn-outline-secondary">Cancelar</a>
+    </div>
+  </form>
+
+  {% if not creando %}
+  <div class="d-grid gap-3">
+    <div class="uf-card">
+      <h2>Contraseña</h2>
+      <p class="small text-muted">Estado: {% if u.debe_cambiar_password %}<strong>debe elegir una contraseña nueva</strong> al ingresar{% else %}sin cambios pendientes{% endif %}.
+        Último ingreso: {{ u.last_login|date:"d/m/Y H:i"|default:"nunca" }}.</p>
+      <form method="post" action="{% url 'usuario_accion' u.pk %}" class="mb-3"
+            onsubmit="return confirm('¿Enviar una contraseña temporal a {{ u.email }}?');">
+        {% csrf_token %}<input type="hidden" name="accion" value="temporal"><input type="hidden" name="volver" value="editar">
+        <button class="btn btn-outline-primary w-100"><i class="bi bi-envelope me-1"></i>Enviar contraseña temporal por correo</button>
+      </form>
+      <details>
+        <summary class="small fw-semibold" style="cursor:pointer;">Definir contraseña manualmente</summary>
+        <form method="post" action="{% url 'usuario_accion' u.pk %}" class="mt-2">
+          {% csrf_token %}<input type="hidden" name="accion" value="manual"><input type="hidden" name="volver" value="editar">
+          <input type="password" name="password" class="form-control mb-2" placeholder="Contraseña nueva" autocomplete="new-password" required>
+          <label class="small d-block mb-2"><input type="checkbox" name="forzar_cambio" checked> Pedir que la cambie al ingresar</label>
+          <button class="btn btn-outline-secondary w-100">Guardar contraseña</button>
+        </form>
+      </details>
+    </div>
+    <div class="uf-card">
+      <h2>Acceso</h2>
+      <form method="post" action="{% url 'usuario_accion' u.pk %}">
+        {% csrf_token %}<input type="hidden" name="volver" value="editar">
+        {% if u.is_active %}
+          <input type="hidden" name="accion" value="desactivar">
+          <button class="btn btn-outline-danger w-100">Desactivar usuario</button>
+          <div class="small text-muted mt-2">No podrá ingresar, pero se conserva su historial.</div>
+        {% else %}
+          <input type="hidden" name="accion" value="activar">
+          <button class="btn btn-outline-success w-100">Activar usuario</button>
+        {% endif %}
+      </form>
+    </div>
+  </div>
+  {% endif %}
+</div>
+<script>
+  (function () {
+    var radios = document.querySelectorAll('input[name="modo_clave"]'), b = document.getElementById('bloque-manual');
+    function f() { if (b) { var r = document.querySelector('input[name="modo_clave"]:checked'); b.hidden = !(r && r.value === 'manual'); } }
+    radios.forEach(function (r) { r.addEventListener('change', f); }); f();
+  })();
+</script>
+{% endblock %}

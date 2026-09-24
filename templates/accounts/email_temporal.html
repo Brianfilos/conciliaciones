@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="es"><body style="margin:0;padding:24px;background:#f0f4f8;font-family:Arial,Helvetica,sans-serif;color:#0f172a;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;">
+  <tr><td style="background:#1B3A6B;padding:20px 24px;color:#ffffff;font-size:18px;font-weight:bold;">Sistema de Conciliación de CXC</td></tr>
+  <tr><td style="padding:24px;">
+    <p style="margin:0 0 12px;font-size:15px;">Hola <strong>{{ usuario.get_full_name|default:usuario.username }}</strong>,</p>
+    <p style="margin:0 0 18px;font-size:14px;line-height:1.5;color:#334155;">
+      {% if motivo == "alta" %}Se creó tu usuario en el sistema.{% else %}Recibimos una solicitud para recuperar tu acceso.{% endif %}
+      Usa estos datos para ingresar:
+    </p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;border-radius:10px;">
+      <tr><td style="padding:14px 18px;font-size:13px;color:#64748b;">Usuario</td><td style="padding:14px 18px;font-size:15px;font-weight:bold;">{{ usuario.username }}</td></tr>
+      <tr><td style="padding:0 18px 14px;font-size:13px;color:#64748b;">Contraseña temporal</td>
+          <td style="padding:0 18px 14px;font-size:20px;font-weight:bold;letter-spacing:1px;font-family:Consolas,Menlo,monospace;">{{ temporal }}</td></tr>
+    </table>
+    <p style="margin:20px 0;text-align:center;">
+      <a href="{{ login_url }}" style="background:#1B3A6B;color:#ffffff;text-decoration:none;padding:12px 26px;border-radius:8px;font-size:14px;font-weight:bold;display:inline-block;">Ingresar al sistema</a>
+    </p>
+    <p style="margin:0 0 8px;font-size:13px;line-height:1.5;color:#475569;">Al entrar te pediremos elegir una contraseña nueva. Esta contraseña temporal vence en {{ horas }} horas.</p>
+    {% if motivo != "alta" %}<p style="margin:0;font-size:12px;line-height:1.5;color:#94a3b8;">Si no fuiste tú, ignora este mensaje: tu contraseña de siempre sigue funcionando.</p>{% endif %}
+  </td></tr>
+</table>
+</body></html>

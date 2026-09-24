@@ -17,6 +17,13 @@ class CustomUser(AbstractUser):
     rol = models.CharField(max_length=20, choices=ROL_CHOICES, default='OPERADOR')
     email = models.EmailField(unique=True, blank=False)
 
+    # Contraseña temporal (recuperación por correo). Se guarda con hash, caduca y NO reemplaza
+    # a la contraseña real: si el usuario no la usa, su contraseña de siempre sigue funcionando.
+    password_temporal = models.CharField(max_length=128, blank=True, default='')
+    password_temporal_expira = models.DateTimeField(null=True, blank=True)
+    # Obliga a elegir una contraseña nueva en el próximo ingreso
+    debe_cambiar_password = models.BooleanField(default=False)
+
     def __str__(self):
         return f"{self.username} ({self.get_rol_display()})"
 

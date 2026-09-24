@@ -28,7 +28,9 @@ class Municipio(models.Model):
 
     @property
     def ruta_img(self):
-        return os.path.join(self.ruta_base, 'IMG')
+        # Los logos viajan con el código (static/img/logos/<codigo>/); la carpeta
+        # MUNICIPIOS/ es solo material de trabajo local y no existe en el servidor.
+        return os.path.join(str(settings.BASE_DIR), 'static', 'img', 'logos', self.codigo.lower())
 
     @property
     def logos(self):
@@ -49,11 +51,16 @@ class Municipio(models.Model):
     def get_logo_url(self):
         logo = self.logo_principal
         if logo:
-            return f'/municipio-media/{self.codigo}/IMG/{logo}'
+            return self._url_logo(logo)
         return None
 
     def get_todos_logos_urls(self):
-        return [f'/municipio-media/{self.codigo}/IMG/{f}' for f in self.logos]
+        return [self._url_logo(f) for f in self.logos]
+
+    def _url_logo(self, archivo):
+        from urllib.parse import quote
+        # Sin pasar por el manifiesto de hashes: el archivo original también queda en STATIC_ROOT
+        return f"{settings.STATIC_URL}img/logos/{quote(self.codigo.lower())}/{quote(archivo)}"
 
 
 class CIIUMunicipio(models.Model):

@@ -1,14 +1,4 @@
-import os
-from django.conf import settings
 from .models import Municipio
-
-
-def _get_gobs_logos():
-    gobs_img = os.path.join(str(settings.GOBS_ROOT), 'IMG')
-    if not os.path.exists(gobs_img):
-        return []
-    exts = ('.png', '.jpg', '.jpeg', '.webp', '.svg')
-    return sorted(f for f in os.listdir(gobs_img) if f.lower().endswith(exts))
 
 
 def municipio_context(request):
@@ -19,7 +9,6 @@ def municipio_context(request):
         'fuente_principal': 'Montserrat, sans-serif',
         'municipio_actual': None,
         'logo_url': None,
-        'gobs_logos': _get_gobs_logos(),
     }
     if request.user.is_authenticated and hasattr(request.user, 'municipio') and request.user.municipio:
         m = request.user.municipio
