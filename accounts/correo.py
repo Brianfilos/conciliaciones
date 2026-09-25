@@ -38,8 +38,9 @@ def asignar_temporal(usuario):
     return plano
 
 
-def temporal_reciente(usuario, minutos=5):
+def temporal_reciente(usuario, minutos=None):
     """True si ya se emitió una temporal hace poco (frena el reenvío repetido)."""
+    minutos = settings.PASSWORD_TEMPORAL_ESPERA_MIN if minutos is None else minutos
     if not usuario.password_temporal_expira:
         return False
     emitida = usuario.password_temporal_expira - timedelta(hours=settings.PASSWORD_TEMPORAL_HORAS)

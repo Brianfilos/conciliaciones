@@ -134,6 +134,8 @@ else:
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='Sistema de CXC <noreply@conciliaciones.gov.co>')
 SITE_URL = config('SITE_URL', default='http://localhost:8000')
 PASSWORD_TEMPORAL_HORAS = config('PASSWORD_TEMPORAL_HORAS', default=24, cast=int)
+# Espera mínima entre dos recuperaciones del mismo usuario (evita que alguien inunde un buzón)
+PASSWORD_TEMPORAL_ESPERA_MIN = config('PASSWORD_TEMPORAL_ESPERA_MIN', default=2, cast=int)
 
 # Remitente de las exportaciones enviadas por correo desde Ver datos (debe estar verificado en Brevo)
 EXPORT_FROM_EMAIL = config('EXPORT_FROM_EMAIL', default=DEFAULT_FROM_EMAIL)

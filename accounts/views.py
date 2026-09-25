@@ -78,7 +78,8 @@ class RecuperarPasswordView(View):
             if usuario and not correo.temporal_reciente(usuario):
                 plano = correo.asignar_temporal(usuario)
                 correo.enviar_temporal(usuario, plano)
-            return render(request, 'password_reset.html', {'form': RecuperarForm(), 'enviado': True})
+            return render(request, 'password_reset.html', {'form': RecuperarForm(), 'enviado': True,
+                                                           'espera': settings.PASSWORD_TEMPORAL_ESPERA_MIN})
         return render(request, 'password_reset.html', {'form': form, 'enviado': False})
 
 

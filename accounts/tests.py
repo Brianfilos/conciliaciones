@@ -49,8 +49,28 @@ class RecuperacionTests(TestCase):
 
     def test_limite_de_reenvio(self):
         self._pedir()
-        self._pedir()
+        r = self._pedir()
         self.assertEqual(len(mail.outbox), 1)
+        self.assertContains(r, "Cada solicitud genera una contraseña nueva")  # y se avisa al usuario
+
+    def _pasar_el_tiempo(self, minutos):
+        self.u.refresh_from_db()
+        self.u.password_temporal_expira -= timedelta(minutes=minutos)
+        self.u.save()
+
+    def test_cada_recuperacion_genera_una_contrasena_distinta(self):
+        claves = []
+        for _ in range(4):
+            self._pedir()
+            claves.append(_temporal_del_correo(mail.outbox[-1]))
+            self._pasar_el_tiempo(10)
+        self.assertEqual(len(mail.outbox), 4)
+        self.assertEqual(len(set(claves)), 4)
+        # solo sirve la última; las anteriores quedan sin efecto
+        c = self.client_class()
+        for vieja in claves[:-1]:
+            self.assertFalse(c.login(username="ana", password=vieja))
+        self.assertTrue(self.client_class().login(username="ana", password=claves[-1]))
 
     def test_la_temporal_no_bloquea_la_clave_real(self):
         self._pedir()
