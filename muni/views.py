@@ -7,6 +7,7 @@ from django.views import View
 from django.http import HttpResponse, Http404
 from django.conf import settings
 from django.contrib import messages
+from accounts import permisos
 import pandas as pd
 from django.db import models as models
 from .models import Municipio, CIIUMunicipio, ConceptoMunicipio
@@ -70,6 +71,8 @@ class CargarCIIUView(View):
         if not request.user.is_admin:
             return redirect("municipio_home")
         municipio = get_object_or_404(Municipio, codigo=codigo)
+        if not permisos.es_admin_de(request.user, municipio):
+            return redirect("municipio_home")
         q = request.GET.get("q", "").strip()
         qs = CIIUMunicipio.objects.filter(municipio=municipio).order_by("codigo")
         if q:
@@ -88,6 +91,8 @@ class CargarCIIUView(View):
         if not request.user.is_admin:
             return redirect("municipio_home")
         municipio = get_object_or_404(Municipio, codigo=codigo)
+        if not permisos.es_admin_de(request.user, municipio):
+            return redirect("municipio_home")
         action = request.POST.get("action", "importar")
 
         if action == "eliminar":
@@ -147,6 +152,8 @@ class CargarConceptosView(View):
         if not request.user.is_admin:
             return redirect("municipio_home")
         municipio = get_object_or_404(Municipio, codigo=codigo)
+        if not permisos.es_admin_de(request.user, municipio):
+            return redirect("municipio_home")
         q = request.GET.get("q", "").strip()
         qs = ConceptoMunicipio.objects.filter(municipio=municipio).order_by("codigo")
         if q:
@@ -165,6 +172,8 @@ class CargarConceptosView(View):
         if not request.user.is_admin:
             return redirect("municipio_home")
         municipio = get_object_or_404(Municipio, codigo=codigo)
+        if not permisos.es_admin_de(request.user, municipio):
+            return redirect("municipio_home")
         action = request.POST.get("action", "importar")
 
         if action == "eliminar":

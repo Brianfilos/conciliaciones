@@ -5,6 +5,7 @@ from django.utils.decorators import method_decorator
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 
+from accounts import permisos
 from .models import Proceso
 from .services import envio_exportaciones as envio
 
@@ -16,7 +17,7 @@ class EnviarExportacionView(View):
     def post(self, request, proceso_id):
         proceso = get_object_or_404(Proceso, id=proceso_id)
         # Mismo criterio de acceso que la exportación
-        if proceso.municipio != request.user.municipio and not request.user.is_admin:
+        if not permisos.del_municipio(request.user, proceso.municipio):
             return redirect("municipio_home")
         destino = request.POST.get("next", "")
         if not url_has_allowed_host_and_scheme(destino, allowed_hosts={request.get_host()}):

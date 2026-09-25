@@ -10,6 +10,7 @@ from django.core.paginator import Paginator
 from django.http import HttpResponse, JsonResponse
 from django.contrib import messages
 from django.utils import timezone
+from accounts import permisos
 from .models import Proceso, Ejecucion, InsumoEjecucion, EncabezadoCXC, DetalleCXC
 from .forms import EjecutarProcesoForm
 from .services.motor import MotorETL
@@ -56,7 +57,7 @@ class ProcesoListView(View):
 class EjecutarProcesoView(View):
     def _get_proceso(self, proceso_id, request):
         proceso = get_object_or_404(Proceso, id=proceso_id)
-        if proceso.municipio != request.user.municipio and not request.user.is_admin:
+        if not permisos.del_municipio(request.user, proceso.municipio):
             return None
         return proceso
 
@@ -103,14 +104,10 @@ class LimpiarProcesoView(View):
     """Borra todos los encabezados, detalles y ejecuciones de un proceso. Solo admins."""
 
     def post(self, request, proceso_id):
-        if not request.user.is_admin:
-            messages.error(request, "No tienes permisos para realizar esta acción.")
-            return redirect("ejecutar_proceso", proceso_id=proceso_id)
-
         proceso = get_object_or_404(Proceso, id=proceso_id)
-        # Verificar que el proceso pertenece al municipio del usuario (o es superusuario)
-        if proceso.municipio != request.user.municipio and not request.user.is_superuser:
-            messages.error(request, "No tienes permisos sobre este proceso.")
+        # Solo el administrador de este municipio (o un superusuario) puede borrar datos y ejecuciones
+        if not permisos.es_admin_de(request.user, proceso.municipio):
+            messages.error(request, "Solo el administrador del municipio puede borrar datos y ejecuciones.")
             return redirect("ejecutar_proceso", proceso_id=proceso_id)
 
         enc_count = proceso.encabezados.count()
@@ -138,7 +135,7 @@ class HistorialView(View):
 @login_required
 def ejecutar_progreso(request, ejecucion_id):
     ejecucion = get_object_or_404(Ejecucion, id=ejecucion_id)
-    if ejecucion.proceso.municipio != request.user.municipio and not request.user.is_admin:
+    if not permisos.del_municipio(request.user, ejecucion.proceso.municipio):
         return redirect("municipio_home")
     return render(request, "etl/progreso.html", {"ejecucion": ejecucion})
 
@@ -146,6 +143,8 @@ def ejecutar_progreso(request, ejecucion_id):
 @login_required
 def ejecucion_status(request, ejecucion_id):
     ejecucion = get_object_or_404(Ejecucion, id=ejecucion_id)
+    if not permisos.del_municipio(request.user, ejecucion.proceso.municipio):
+        return JsonResponse({"error": "Sin acceso"}, status=403)
     return JsonResponse({
         "estado": ejecucion.estado,
         "nuevos": ejecucion.registros_nuevos,
@@ -159,7 +158,7 @@ def ejecucion_status(request, ejecucion_id):
 class DashboardView(View):
     def get(self, request, proceso_id):
         proceso = get_object_or_404(Proceso, id=proceso_id)
-        if proceso.municipio != request.user.municipio and not request.user.is_admin:
+        if not permisos.del_municipio(request.user, proceso.municipio):
             return redirect("municipio_home")
 
         es_caldas     = proceso.municipio.codigo == "CALDAS"
@@ -530,7 +529,7 @@ class DashboardView(View):
 class ExportarView(View):
     def get(self, request, proceso_id):
         proceso = get_object_or_404(Proceso, id=proceso_id)
-        if proceso.municipio != request.user.municipio and not request.user.is_admin:
+        if not permisos.del_municipio(request.user, proceso.municipio):
             return redirect("municipio_home")
 
         fmt = request.GET.get("format", "excel")

@@ -165,3 +165,80 @@ class ExplorerHtmlTests(TestCase):
         analizador.feed(html)
         self.assertEqual(analizador.maxima, 1, "hay formularios anidados")
         self.assertFalse(analizador.filtros_con_campos_de_correo)
+
+
+class PermisosPorMunicipioTests(TestCase):
+    """Cada usuario trabaja solo con su municipio y solo su administrador puede borrar."""
+
+    def setUp(self):
+        self.a = Municipio.objects.create(codigo="MUNA", nombre="Municipio A")
+        self.b = Municipio.objects.create(codigo="MUNB", nombre="Municipio B")
+        self.pa = Proceso.objects.create(municipio=self.a, codigo="CXC_AUTO", nombre="Auto A")
+        self.op_a = User.objects.create_user("op_a", "opa@example.com", "Operador#2026", municipio=self.a, rol="OPERADOR")
+        self.an_a = User.objects.create_user("an_a", "ana@example.com", "Analitico#2026", municipio=self.a, rol="ANALITICO")
+        self.adm_a = User.objects.create_user("adm_a", "adma@example.com", "Admin#2026", municipio=self.a, rol="ADMIN")
+        self.adm_b = User.objects.create_user("adm_b", "admb@example.com", "Admin#2026", municipio=self.b, rol="ADMIN")
+        self.root = User.objects.create_superuser("root", "root@example.com", "Root#2026")
+        ej = Ejecucion.objects.create(proceso=self.pa, usuario=self.op_a)
+        _crear_encabezado(self.pa, ej, "1", "PENDIENTE DE PAGO", 100)
+
+    def _limpiar(self, usuario):
+        self.client.force_login(usuario)
+        return self.client.post(reverse("limpiar_proceso", args=[self.pa.id]))
+
+    def test_operador_y_analitico_no_pueden_borrar(self):
+        for u in (self.op_a, self.an_a):
+            self._limpiar(u)
+            self.assertEqual(EncabezadoCXC.objects.filter(proceso=self.pa).count(), 1, u.username)
+            self.assertEqual(Ejecucion.objects.filter(proceso=self.pa).count(), 1, u.username)
+
+    def test_admin_de_otro_municipio_no_puede_borrar(self):
+        self._limpiar(self.adm_b)
+        self.assertEqual(EncabezadoCXC.objects.filter(proceso=self.pa).count(), 1)
+        self.assertEqual(Ejecucion.objects.filter(proceso=self.pa).count(), 1)
+
+    def test_admin_del_municipio_si_puede_borrar(self):
+        self._limpiar(self.adm_a)
+        self.assertEqual(EncabezadoCXC.objects.filter(proceso=self.pa).count(), 0)
+        self.assertEqual(Ejecucion.objects.filter(proceso=self.pa).count(), 0)
+
+    def test_superusuario_puede_borrar(self):
+        self._limpiar(self.root)
+        self.assertEqual(EncabezadoCXC.objects.filter(proceso=self.pa).count(), 0)
+
+    def test_la_zona_de_peligro_solo_se_ve_al_admin(self):
+        self.client.force_login(self.op_a)
+        self.assertNotContains(self.client.get(reverse("ejecutar_proceso", args=[self.pa.id])), "Limpiar todos los datos")
+        self.client.force_login(self.adm_a)
+        self.assertContains(self.client.get(reverse("ejecutar_proceso", args=[self.pa.id])), "Limpiar todos los datos")
+
+    def test_admin_de_otro_municipio_no_entra_a_procesos_ajenos(self):
+        self.client.force_login(self.adm_b)
+        for nombre in ("ejecutar_proceso", "dashboard", "exportar"):
+            r = self.client.get(reverse(nombre, args=[self.pa.id]))
+            self.assertEqual(r.status_code, 302, nombre)
+            self.assertNotIn(str(self.pa.id), r["Location"], nombre)
+        self.client.post(reverse("exportar_correo", args=[self.pa.id]), {"destinatarios": "x@example.com", "formato": "csv"})
+        self.assertEqual(len(mail.outbox), 0)
+        ej = Ejecucion.objects.filter(proceso=self.pa).first()
+        self.assertEqual(self.client.get(reverse("ejecucion_status", args=[ej.id])).status_code, 403)
+
+    def test_el_operador_del_municipio_si_trabaja_con_sus_datos(self):
+        self.client.force_login(self.op_a)
+        for nombre in ("ejecutar_proceso", "dashboard"):
+            self.assertEqual(self.client.get(reverse(nombre, args=[self.pa.id])).status_code, 200, nombre)
+
+    def test_ciiu_y_conceptos_solo_el_admin_de_ese_municipio(self):
+        from muni.models import CIIUMunicipio, ConceptoMunicipio
+        c = CIIUMunicipio.objects.create(municipio=self.a, codigo="0111", descripcion="x", tipo="COMERCIAL")
+        k = ConceptoMunicipio.objects.create(municipio=self.a, codigo="K1", descripcion="x")
+        for usuario in (self.adm_b, self.op_a):
+            self.client.force_login(usuario)
+            for nombre, datos in (("cargar_ciiu", {"action": "eliminar", "ciiu_id": c.id}),
+                                  ("cargar_conceptos", {"action": "eliminar", "concepto_id": k.id})):
+                self.assertEqual(self.client.get(reverse(nombre, args=["MUNA"])).status_code, 302, nombre)
+                self.client.post(reverse(nombre, args=["MUNA"]), datos)
+        self.assertTrue(CIIUMunicipio.objects.filter(pk=c.pk).exists())
+        self.assertTrue(ConceptoMunicipio.objects.filter(pk=k.pk).exists())
+        self.client.force_login(self.adm_a)
+        self.assertEqual(self.client.get(reverse("cargar_ciiu", args=["MUNA"])).status_code, 200)
