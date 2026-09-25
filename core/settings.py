@@ -135,6 +135,12 @@ DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='Sistema de CXC <norep
 SITE_URL = config('SITE_URL', default='http://localhost:8000')
 PASSWORD_TEMPORAL_HORAS = config('PASSWORD_TEMPORAL_HORAS', default=24, cast=int)
 
+# Remitente de las exportaciones enviadas por correo desde Ver datos (debe estar verificado en Brevo)
+EXPORT_FROM_EMAIL = config('EXPORT_FROM_EMAIL', default=DEFAULT_FROM_EMAIL)
+EXPORT_MAX_ADJUNTOS_MB = config('EXPORT_MAX_ADJUNTOS_MB', default=10, cast=int)
+# Opcional: a dónde llegan las respuestas si el remitente es otro (p. ej. noreply@filosdev.com)
+EXPORT_REPLY_TO = config('EXPORT_REPLY_TO', default='')
+
 AUTHENTICATION_BACKENDS = [
     'accounts.backends.PasswordTemporalBackend',
     'django.contrib.auth.backends.ModelBackend',

@@ -107,3 +107,24 @@ class DetalleCXC(models.Model):
 
     class Meta:
         ordering = ["codigo_concepto"]
+
+
+class EnvioExportacion(models.Model):
+    """Registro de cada exportación enviada por correo (los adjuntos contienen datos de contribuyentes)."""
+    usuario = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="envios_exportacion")
+    proceso = models.ForeignKey(Proceso, on_delete=models.SET_NULL, null=True, related_name="envios")
+    fecha = models.DateTimeField(auto_now_add=True)
+    procesos = models.CharField(max_length=300, blank=True)
+    destinatarios = models.TextField()
+    asunto = models.CharField(max_length=250, blank=True)
+    formato = models.CharField(max_length=10)
+    filtros = models.TextField(blank=True)
+    adjuntos = models.TextField(blank=True)
+    ok = models.BooleanField(default=True)
+    error = models.CharField(max_length=500, blank=True)
+
+    class Meta:
+        ordering = ["-fecha"]
+
+    def __str__(self):
+        return f"{self.fecha:%d/%m/%Y %H:%M} · {self.usuario} → {self.destinatarios}"

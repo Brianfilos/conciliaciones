@@ -1,3 +1,4 @@
+from django.conf import settings
 from .models import Municipio
 
 
@@ -8,6 +9,7 @@ def municipio_context(request):
         'color_texto_header': '#ffffff',
         'fuente_principal': 'Montserrat, sans-serif',
         'municipio_actual': None,
+        'export_from_email': settings.EXPORT_FROM_EMAIL,
         'logo_url': None,
     }
     if request.user.is_authenticated and hasattr(request.user, 'municipio') and request.user.municipio:

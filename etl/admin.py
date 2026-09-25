@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Proceso, InsumoDefinicion, Ejecucion, EncabezadoCXC, DetalleCXC, InsumoEjecucion
+from .models import EnvioExportacion, Proceso, InsumoDefinicion, Ejecucion, EncabezadoCXC, DetalleCXC, InsumoEjecucion
 
 class InsumoInline(admin.TabularInline):
     model = InsumoDefinicion
@@ -27,3 +27,11 @@ class EncabezadoAdmin(admin.ModelAdmin):
 class DetalleAdmin(admin.ModelAdmin):
     list_display = ["encabezado", "codigo_concepto", "valor_unitario", "valor_total", "centro_costo"]
     list_filter = ["encabezado__proceso__municipio"]
+
+
+@admin.register(EnvioExportacion)
+class EnvioExportacionAdmin(admin.ModelAdmin):
+    list_display = ["fecha", "usuario", "procesos", "formato", "destinatarios", "ok"]
+    list_filter = ["ok", "formato"]
+    search_fields = ["destinatarios", "usuario__username", "procesos"]
+    readonly_fields = [f.name for f in EnvioExportacion._meta.fields]
