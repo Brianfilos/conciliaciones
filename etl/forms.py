@@ -1,5 +1,5 @@
 from django import forms
-from .models import Proceso, InsumoDefinicion
+from .models import ConfiguracionEnvio, Proceso, InsumoDefinicion
 from .services import gobs_pg
 
 # Insumos que GOBS entrega directamente cuando el proceso tiene fuente PostgreSQL.
@@ -35,3 +35,27 @@ class EjecutarProcesoForm(forms.Form):
         if desde and hasta and hasta < desde:
             self.add_error("fecha_hasta", "La fecha final no puede ser anterior a la inicial.")
         return datos
+
+
+class ConfiguracionEnvioForm(forms.ModelForm):
+    class Meta:
+        model = ConfiguracionEnvio
+        fields = ["saludo", "mensaje", "despedida", "firma_imagen", "firma_texto"]
+        widgets = {
+            "saludo": forms.TextInput(attrs={"class": "form-control"}),
+            "mensaje": forms.Textarea(attrs={"class": "form-control", "rows": 4}),
+            "despedida": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
+            "firma_imagen": forms.FileInput(attrs={"class": "form-control", "accept": "image/png,image/jpeg"}),
+            "firma_texto": forms.Textarea(attrs={"class": "form-control", "rows": 3,
+                                                 "placeholder": "Nombre\nCargo\nTeléfono · correo"}),
+        }
+
+    def clean_firma_imagen(self):
+        f = self.cleaned_data.get("firma_imagen")
+        if f and hasattr(f, "size"):
+            if f.size > 2 * 1024 * 1024:
+                raise forms.ValidationError("La imagen pesa más de 2 MB.")
+            tipo = getattr(f, "content_type", "")
+            if tipo and tipo not in ("image/png", "image/jpeg"):
+                raise forms.ValidationError("Usa una imagen PNG o JPG.")
+        return f

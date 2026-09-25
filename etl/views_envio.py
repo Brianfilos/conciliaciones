@@ -100,7 +100,8 @@ class EnviarExportacionView(View):
         if request.POST.get("incluir_actual"):
             formato = request.POST.get("formato_actual", "excel")
             items.append({"proceso": proceso, "tab": request.POST.get("tab", "encabezado"),
-                          "filtros": _limpio(request.POST.get("filtros", "")), "formato": formato})
+                          "filtros": _limpio(request.POST.get("filtros", "")), "formato": formato,
+                          "registros": request.POST.get("registros", "")})
         cola = leer_cola(request)
         actual = f"{proceso.id}:{request.POST.get('tab', 'encabezado')}"
         for clave, it in cola.items():
@@ -110,7 +111,8 @@ class EnviarExportacionView(View):
             if p is None:
                 continue
             formato = request.POST.get(f"formato:{clave}", it["formato"])
-            items.append({"proceso": p, "tab": it["tab"], "filtros": it["filtros"], "formato": formato})
+            items.append({"proceso": p, "tab": it["tab"], "filtros": it["filtros"], "formato": formato,
+                          "registros": it.get("registros", "")})
         try:
             r = envio.enviar(request.user, items, request.POST.get("destinatarios", ""),
                              request.POST.get("asunto", ""), request.POST.get("mensaje", ""))
@@ -122,3 +124,74 @@ class EnviarExportacionView(View):
             request, f"Enviado a {', '.join(r['destinatarios'])} desde {r['remitente']} "
                      f"con {len(r['adjuntos'])} adjunto(s): {', '.join(r['adjuntos'])}.")
         return volver
+
+
+# ── Configuración del correo (solo superusuario) ─────────────────────────────
+
+import base64
+from pathlib import Path
+
+from django.conf import settings
+from django.http import HttpResponse
+from django.template.loader import render_to_string
+from django.views.decorators.clickjacking import xframe_options_sameorigin
+
+from accounts.views import SuperusuarioMixin
+from .forms import ConfiguracionEnvioForm
+from .models import (DESPEDIDA_CORREO_DEFECTO, MENSAJE_CORREO_DEFECTO, ConfiguracionEnvio)
+
+
+class ConfigCorreoView(SuperusuarioMixin, View):
+    def get(self, request):
+        from django.shortcuts import render
+        cfg = ConfiguracionEnvio.obtener()
+        return render(request, "etl/config_correo.html", {"form": ConfiguracionEnvioForm(instance=cfg), "cfg": cfg})
+
+    def post(self, request):
+        from django.shortcuts import render
+        cfg = ConfiguracionEnvio.obtener()
+        if request.POST.get("restablecer"):
+            cfg.saludo, cfg.mensaje, cfg.despedida = "Cordial saludo,", MENSAJE_CORREO_DEFECTO, DESPEDIDA_CORREO_DEFECTO
+            cfg.actualizado_por = request.user
+            cfg.save()
+            messages.success(request, "Se restablecieron el saludo, el mensaje y la despedida originales.")
+            return redirect("config_correo")
+        form = ConfiguracionEnvioForm(request.POST, request.FILES, instance=cfg)
+        if not form.is_valid():
+            return render(request, "etl/config_correo.html", {"form": form, "cfg": cfg})
+        nueva = form.save(commit=False)
+        if request.POST.get("quitar_firma") and not request.FILES.get("firma_imagen"):
+            nueva.firma_imagen.delete(save=False)
+            nueva.firma_imagen = ""
+        nueva.actualizado_por = request.user
+        nueva.save()
+        messages.success(request, "Configuración del correo guardada. Se usará en el próximo envío.")
+        return redirect("config_correo")
+
+
+def _data_uri(datos, subtipo):
+    return f"data:image/{subtipo};base64,{base64.b64encode(datos).decode()}"
+
+
+@method_decorator(xframe_options_sameorigin, name="dispatch")
+class ConfigCorreoVistaView(SuperusuarioMixin, View):
+    """HTML del correo con datos de ejemplo, para verlo dentro de un iframe."""
+
+    def get(self, request):
+        cfg = ConfiguracionEnvio.obtener()
+        detalles = [
+            {"archivo": "COPACABANA_CXC_AUTO_encabezado_24-09-2026.xlsx", "proceso": "Autorretención",
+             "contenido": "Encabezado", "formato": "Excel", "registros": "3.649", "filtros": "pago: PAGO REALIZADO"},
+            {"archivo": "COPACABANA_CXC_RETE_encabezado_24-09-2026.csv", "proceso": "Retención ICA",
+             "contenido": "Encabezado", "formato": "CSV", "registros": "412", "filtros": "pago: PENDIENTE · desde: 2026-01-01"},
+        ]
+        ctx = envio.contexto_correo(cfg, "Municipio de Copacabana", detalles,
+                                    "Este es un mensaje adicional de ejemplo.", request.user.get_full_name() or request.user.username)
+        html = render_to_string("etl/email_exportacion.html", ctx)
+        logo = Path(settings.BASE_DIR) / "static" / "img" / "marca" / "logo-gobs-blanco.png"
+        if logo.exists():
+            html = html.replace("cid:logo-gobs", _data_uri(logo.read_bytes(), "png"))
+        firma = envio._datos_firma(cfg)
+        if firma:
+            html = html.replace("cid:firma", _data_uri(*firma))
+        return HttpResponse(html)

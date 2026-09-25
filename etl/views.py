@@ -1,4 +1,5 @@
 import io
+import re
 import csv
 import threading
 from urllib.parse import urlencode
@@ -528,6 +529,17 @@ class DashboardView(View):
 @method_decorator(login_required, name="dispatch")
 class ExportarView(View):
     def get(self, request, proceso_id):
+        """Genera la exportación y le agrega la fecha de generación al nombre del archivo
+        (COPACABANA_CXC_AUTO_24-09-2026.xlsx), para que cada descarga o adjunto sea identificable."""
+        resp = self._generar(request, proceso_id)
+        cd = resp["Content-Disposition"] if hasattr(resp, "has_header") and resp.has_header("Content-Disposition") else ""
+        m = re.match(r'^(attachment; filename=")(.+)\.(\w+)(")$', cd)
+        if m:
+            fecha = timezone.localdate().strftime("%d-%m-%Y")
+            resp["Content-Disposition"] = f'{m.group(1)}{m.group(2)}_{fecha}.{m.group(3)}{m.group(4)}'
+        return resp
+
+    def _generar(self, request, proceso_id):
         proceso = get_object_or_404(Proceso, id=proceso_id)
         if not permisos.del_municipio(request.user, proceso.municipio):
             return redirect("municipio_home")

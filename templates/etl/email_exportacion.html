@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es"><body style="margin:0;padding:24px;background:#f0f4f8;font-family:Arial,Helvetica,sans-serif;color:#0f172a;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;">
+  <tr><td style="background:#1B3A6B;padding:20px 26px;">
+    <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+      {% if con_logo %}<td style="padding-right:16px;"><img src="cid:logo-gobs" alt="GOBS" height="34" style="display:block;height:34px;width:auto;border:0;"></td>{% endif %}
+      <td style="color:#ffffff;">
+        <div style="font-size:17px;font-weight:bold;line-height:1.2;">Sistema de información InOva</div>
+        <div style="font-size:12px;color:#cbd5e1;margin-top:3px;">{{ municipio }}</div>
+      </td>
+    </tr></table>
+  </td></tr>
+
+  <tr><td style="padding:26px;">
+    <p style="margin:0 0 14px;font-size:15px;">{{ saludo }}</p>
+    <p style="margin:0 0 18px;font-size:14px;line-height:1.6;color:#334155;white-space:pre-line;">{{ cuerpo }}</p>
+
+    {% if mensaje %}
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+      <tr><td style="border-left:4px solid #1B3A6B;background:#f8fafc;padding:12px 16px;font-size:14px;line-height:1.6;color:#334155;white-space:pre-line;">{{ mensaje }}</td></tr>
+    </table>
+    {% endif %}
+
+    <div style="font-size:11px;font-weight:bold;letter-spacing:.08em;text-transform:uppercase;color:#64748b;margin:0 0 8px;">
+      {% if items|length > 1 %}Archivos adjuntos ({{ items|length }}){% else %}Archivo adjunto{% endif %}
+    </div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:10px;border-collapse:separate;">
+      {% for it in items %}
+      <tr><td style="padding:14px 16px;{% if not forloop.last %}border-bottom:1px solid #e2e8f0;{% endif %}">
+        <div style="font-size:14px;font-weight:bold;color:#0f172a;word-break:break-all;">&#128206; {{ it.archivo }}</div>
+        <div style="font-size:13px;color:#475569;margin-top:4px;">
+          {{ it.proceso }} &middot; {{ it.contenido }} &middot; {{ it.formato }}{% if it.registros %} &middot; {{ it.registros }} registros{% endif %}
+        </div>
+        <div style="font-size:12px;color:#64748b;margin-top:4px;">Filtros aplicados: {{ it.filtros }}</div>
+      </td></tr>
+      {% endfor %}
+    </table>
+
+    {% if despedida %}<p style="margin:22px 0 0;font-size:13px;line-height:1.6;color:#475569;white-space:pre-line;">{{ despedida }}</p>{% endif %}
+    {% if con_firma %}
+    <div style="margin-top:22px;"><img src="cid:firma" alt="Firma" style="display:block;max-width:100%;height:auto;border:0;border-radius:10px;"></div>
+    {% elif firma_texto %}
+    <div style="margin-top:22px;font-size:13px;line-height:1.6;color:#0f172a;white-space:pre-line;">{{ firma_texto }}</div>
+    {% endif %}
+  </td></tr>
+
+  <tr><td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 26px;font-size:12px;line-height:1.5;color:#64748b;">
+    Enviado por <strong>{{ remitente_nombre }}</strong> desde el Sistema de CXC &middot; GOBS Estrategias Públicas.<br>
+    La información contiene datos de contribuyentes: manéjala de forma confidencial.
+  </td></tr>
+</table>
+</body></html>

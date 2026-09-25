@@ -9,6 +9,11 @@ from muni.models import Municipio
 User = get_user_model()
 
 
+def _adjuntos(mensaje):
+    """Solo los archivos de datos (el logo/firma incrustados viajan como imágenes dentro del mensaje)."""
+    return [a for a in mensaje.attachments if isinstance(a, tuple)]
+
+
 def _texto(contenido):
     """Los adjuntos de texto llegan como str; la descarga como bytes (con BOM para Excel)."""
     if isinstance(contenido, bytes):
@@ -61,7 +66,7 @@ class EnvioExportacionTests(TestCase):
         self.assertEqual(m.from_email, "Brian Filos <brian.filos@gobs.com.co>")
         self.assertEqual(m.reply_to, ["brian.filos@gobs.com.co"])
         self.assertEqual(m.to, ["cliente@example.com"])
-        nombre, contenido, _ = m.attachments[0]
+        nombre, contenido, _ = _adjuntos(m)[0]
         self.assertTrue(nombre.endswith(".xlsx"))
         self.assertTrue(contenido.startswith(b"PK"))
         reg = EnvioExportacion.objects.get()
@@ -70,7 +75,7 @@ class EnvioExportacionTests(TestCase):
 
     def test_el_adjunto_es_igual_a_la_descarga_con_los_mismos_filtros(self):
         self._enviar(formato_actual="csv", filtros="estado_pago=PENDIENTE")
-        adjunto = _texto(mail.outbox[0].attachments[0][1])
+        adjunto = _texto(_adjuntos(mail.outbox[0])[0][1])
         descarga = self.client.get(reverse("exportar", args=[self.p1.id]),
                                    {"format": "csv", "tab": "encabezado", "estado_pago": "PENDIENTE"})
         self.assertEqual(adjunto.strip(), _texto(descarga.content).strip())
@@ -84,8 +89,8 @@ class EnvioExportacionTests(TestCase):
         self._enviar(self.p2, formato_actual="txt", filtros="estado_pago=PAGO+REALIZADO", mensaje="Va todo junto")
         self.assertEqual(len(mail.outbox), 1)
         m = mail.outbox[0]
-        self.assertEqual(len(m.attachments), 2)
-        por_nombre = {n: _texto(c) for n, c, _ in m.attachments}
+        self.assertEqual(len(_adjuntos(m)), 2)
+        por_nombre = {n: _texto(c) for n, c, _ in _adjuntos(m)}
         auto = next(v for n, v in por_nombre.items() if "CXC_AUTO" in n)
         rete = next(v for n, v in por_nombre.items() if "CXC_RETE" in n)
         self.assertIn("Beto SAS", auto)       # cada adjunto conserva SU filtro
@@ -101,8 +106,8 @@ class EnvioExportacionTests(TestCase):
         self._agregar(self.p1)
         self.client.post(reverse("exportar_correo", args=[self.p2.id]),
                          {"destinatarios": "a@example.com", "tab": "encabezado", "filtros": ""})
-        self.assertEqual(len(mail.outbox[0].attachments), 1)
-        self.assertIn("CXC_AUTO", mail.outbox[0].attachments[0][0])
+        self.assertEqual(len(_adjuntos(mail.outbox[0])), 1)
+        self.assertIn("CXC_AUTO", _adjuntos(mail.outbox[0])[0][0])
 
     def test_quitar_y_vaciar(self):
         self._agregar(self.p1)
@@ -180,7 +185,7 @@ class EnvioSabanetaTests(TestCase):
         self.client.post(reverse("exportar_correo", args=[p.id]),
                          {"destinatarios": "x@example.com", "formato_actual": "csv", "tab": "encabezado",
                           "filtros": "", "incluir_actual": "1"})
-        adjunto = _texto(mail.outbox[0].attachments[0][1])
+        adjunto = _texto(_adjuntos(mail.outbox[0])[0][1])
         self.assertIn("Pagó SAS", adjunto)
         self.assertNotIn("Debe SAS", adjunto)
 
@@ -302,3 +307,122 @@ class PermisosPorMunicipioTests(TestCase):
         self.assertTrue(ConceptoMunicipio.objects.filter(pk=k.pk).exists())
         self.client.force_login(self.adm_a)
         self.assertEqual(self.client.get(reverse("cargar_ciiu", args=["MUNA"])).status_code, 200)
+
+
+def _png(ancho=600, alto=200):
+    """Imagen PNG de prueba (una firma cualquiera)."""
+    from io import BytesIO
+    from PIL import Image
+    buf = BytesIO()
+    Image.new("RGB", (ancho, alto), (10, 10, 10)).save(buf, "PNG")
+    return buf.getvalue()
+
+
+@override_settings(EXPORT_FROM_EMAIL="Brian Filos <brian.filos@gobs.com.co>")
+class ConfiguracionCorreoTests(TestCase):
+    def setUp(self):
+        import tempfile
+        self._media = override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+        self._media.enable()
+        self.addCleanup(self._media.disable)
+        self.mun = Municipio.objects.create(codigo="TEST", nombre="Municipio de Prueba")
+        self.p = Proceso.objects.create(municipio=self.mun, codigo="CXC_AUTO", nombre="Autorretención")
+        self.root = User.objects.create_superuser("root", "root@example.com", "Root#2026")
+        self.adm = User.objects.create_user("adm", "adm@example.com", "Admin#2026", municipio=self.mun, rol="ADMIN")
+        ej = Ejecucion.objects.create(proceso=self.p, usuario=self.adm)
+        _crear_encabezado(self.p, ej, "1", "PENDIENTE DE PAGO", 100, "Ana SAS")
+        self.url = reverse("config_correo")
+
+    def _enviar(self, **extra):
+        self.client.force_login(self.adm)
+        datos = {"destinatarios": "x@example.com", "formato_actual": "csv", "tab": "encabezado", "filtros": "",
+                 "incluir_actual": "1", "registros": "1"}
+        datos.update(extra)
+        self.client.post(reverse("exportar_correo", args=[self.p.id]), datos)
+        return mail.outbox[-1]
+
+    def test_solo_el_superusuario_configura(self):
+        self.client.force_login(self.adm)
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+        self.assertEqual(self.client.post(self.url, {"saludo": "x", "mensaje": "y"}).status_code, 403)
+        self.assertEqual(self.client.get(reverse("config_correo_vista")).status_code, 403)
+        self.client.force_login(self.root)
+        self.assertEqual(self.client.get(self.url).status_code, 200)
+
+    def test_texto_por_defecto_profesional(self):
+        m = self._enviar()
+        self.assertIn("Cordial saludo", m.body)
+        self.assertIn("sistema de información InOva del municipio de Prueba", m.body)
+        self.assertIn("el archivo de pagos que reposa", m.body)
+        self.assertIn("Archivo adjunto", m.body)
+
+    def test_mensaje_y_saludo_configurables_con_variables(self):
+        self.client.force_login(self.root)
+        self.client.post(self.url, {"saludo": "Buen día,", "despedida": "Atentamente,",
+                                    "mensaje": "Pagos de {municipio} ({n_archivos} archivo) al {fecha} {hora}. {no_existe}"})
+        m = self._enviar()
+        self.assertIn("Buen día,", m.body)
+        self.assertIn("Pagos de Prueba (1 archivo) al", m.body)
+        self.assertIn("{no_existe}", m.body)          # variable desconocida: se deja tal cual, no falla
+        self.assertIn("Atentamente,", m.body)
+        self.assertNotIn("Cordial saludo", m.body)
+
+    def test_varios_archivos_usan_plural(self):
+        self.client.force_login(self.root)
+        p2 = Proceso.objects.create(municipio=self.mun, codigo="CXC_RETE", nombre="Retención ICA")
+        ej = Ejecucion.objects.create(proceso=p2, usuario=self.adm)
+        _crear_encabezado(p2, ej, "2", "PENDIENTE DE PAGO", 50, "Beto SAS")
+        self.client.force_login(self.adm)
+        self.client.post(reverse("envio_agregar", args=[p2.id]), {"tab": "encabezado", "filtros": "", "formato_actual": "csv"})
+        m = self._enviar()
+        self.assertIn("los 2 archivos de pagos que reposan", m.body)
+
+    def test_firma_imagen_se_incrusta_y_se_puede_quitar(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.client.force_login(self.root)
+        self.client.post(self.url, {"saludo": "Hola", "mensaje": "M", "despedida": "",
+                                    "firma_imagen": SimpleUploadedFile("firma.png", _png(), content_type="image/png")})
+        m = self._enviar()
+        ids = [a.get("Content-ID") for a in m.attachments if not isinstance(a, tuple)]
+        self.assertIn("<firma>", ids)
+        self.assertIn("cid:firma", m.alternatives[0][0])
+        self.client.force_login(self.root)
+        self.client.post(self.url, {"saludo": "Hola", "mensaje": "M", "despedida": "", "quitar_firma": "on"})
+        m = self._enviar()
+        self.assertNotIn("<firma>", [a.get("Content-ID") for a in m.attachments if not isinstance(a, tuple)])
+        self.assertNotIn("cid:firma", m.alternatives[0][0])
+
+    def test_firma_en_texto_si_no_hay_imagen(self):
+        self.client.force_login(self.root)
+        self.client.post(self.url, {"saludo": "Hola", "mensaje": "M", "despedida": "",
+                                    "firma_texto": "Brian Filos\nIngeniero Mecatrónico"})
+        m = self._enviar()
+        self.assertIn("Ingeniero Mecatrónico", m.body)
+        self.assertIn("Ingeniero Mecatrónico", m.alternatives[0][0])
+
+    def test_rechaza_archivos_que_no_son_imagen(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.client.force_login(self.root)
+        r = self.client.post(self.url, {"saludo": "Hola", "mensaje": "M", "despedida": "",
+                                        "firma_imagen": SimpleUploadedFile("x.png", b"esto no es una imagen", content_type="image/png")})
+        self.assertEqual(r.status_code, 200)
+        from etl.models import ConfiguracionEnvio
+        self.assertFalse(ConfiguracionEnvio.obtener().firma_imagen)
+
+    def test_restablecer_textos(self):
+        from etl.models import ConfiguracionEnvio
+        self.client.force_login(self.root)
+        self.client.post(self.url, {"saludo": "Otro", "mensaje": "Otro mensaje", "despedida": "Chao"})
+        self.client.post(self.url, {"restablecer": "1"})
+        cfg = ConfiguracionEnvio.obtener()
+        self.assertEqual(cfg.saludo, "Cordial saludo,")
+        self.assertIn("InOva", cfg.mensaje)
+
+    def test_vista_previa(self):
+        self.client.force_login(self.root)
+        r = self.client.get(reverse("config_correo_vista"))
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, "Cordial saludo")
+        self.assertContains(r, "Copacabana")
+        self.assertNotContains(r, "cid:")            # los cid se sustituyen por imágenes incrustadas en la página
+        self.assertEqual(r.headers.get("X-Frame-Options"), "SAMEORIGIN")

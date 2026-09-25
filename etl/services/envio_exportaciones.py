@@ -6,16 +6,21 @@ Reutiliza ExportarView, así que cada adjunto es exactamente el archivo que se d
 filtros (fechas, columnas, estados…). Cada envío queda registrado en EnvioExportacion.
 """
 import re
+from email.mime.image import MIMEImage
 from email.utils import parseaddr
+from io import BytesIO
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.mail import EmailMessage
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
+from django.utils import dateformat, timezone, translation
 from django.core.validators import validate_email
 from django.http import QueryDict
 from django.test import RequestFactory
 
-from etl.models import EnvioExportacion
+from accounts import correo
+from etl.models import ConfiguracionEnvio, EnvioExportacion
 
 MAX_DESTINATARIOS = 10
 MAX_ITEMS = 6
@@ -41,7 +46,7 @@ class EnvioError(Exception):
 def etiqueta_filtros(qs):
     """'estado_pago=PENDIENTE&fecha_desde=2026-01-01' -> 'pago: PENDIENTE · desde: 2026-01-01'."""
     q = qs if isinstance(qs, QueryDict) else QueryDict(qs or "")
-    partes = [f"{_ETIQUETAS.get(k, k)}: {v}" for k, v in q.items() if v and k not in _IGNORAR]
+    partes = [f"{_ETIQUETAS.get(k, k)}: {v.replace('✓', '').strip()}" for k, v in q.items() if v and k not in _IGNORAR]
     return " · ".join(partes) or "sin filtros"
 
 
@@ -98,7 +103,7 @@ def enviar(usuario, items, destinatarios_txt, asunto, mensaje):
     if any(it["proceso"].municipio_id != municipio.id for it in items):
         raise EnvioError("Un mismo correo no puede mezclar municipios.")
 
-    adjuntos, lineas = [], []
+    adjuntos, detalles = [], []
     for it in items:
         if it["formato"] not in FORMATOS:
             raise EnvioError("Formato no válido.")
@@ -107,8 +112,8 @@ def enviar(usuario, items, destinatarios_txt, asunto, mensaje):
         params["format"], params["tab"] = it["formato"], tab
         adj = _exportar(usuario, it["proceso"], params)
         adjuntos.append(adj)
-        lineas.append(f"  • {adj[0]} — {it['proceso'].nombre} ({TABS[tab]}, {FORMATOS[it['formato']]}) — "
-                      f"filtros: {etiqueta_filtros(params)}")
+        detalles.append({"proceso": it["proceso"].nombre, "contenido": TABS[tab], "formato": FORMATOS[it["formato"]],
+                         "registros": it.get("registros") or "", "filtros": etiqueta_filtros(params)})
     adjuntos = _nombres_unicos(adjuntos)
     total = sum(len(c) for _, c, _ in adjuntos)
     limite = settings.EXPORT_MAX_ADJUNTOS_MB * 1024 * 1024
@@ -117,17 +122,21 @@ def enviar(usuario, items, destinatarios_txt, asunto, mensaje):
                          f"{settings.EXPORT_MAX_ADJUNTOS_MB} MB. Aplica más filtros o envía menos vistas.")
 
     remitente = settings.EXPORT_FROM_EMAIL
+    for d, (nombre, _, _) in zip(detalles, adjuntos):
+        d["archivo"] = nombre
     nombres_proc = list(dict.fromkeys(it["proceso"].nombre for it in items))
-    cuerpo = "\n".join([
-        "Hola,", "",
-        (mensaje or "").strip() or "Adjunto el reporte solicitado.", "",
-        f"Municipio: {municipio.nombre}", "Adjuntos:", *lineas, "",
-        f"Enviado desde el Sistema de CXC por {usuario.get_full_name() or usuario.username}.",
-    ])
-    msg = EmailMessage(
-        (asunto or "").strip() or f"Reporte {municipio.nombre} — {', '.join(nombres_proc)}",
-        cuerpo, remitente, destinatarios,
-        reply_to=[settings.EXPORT_REPLY_TO or parseaddr(remitente)[1] or remitente])
+    cfg = ConfiguracionEnvio.obtener()
+    contexto = contexto_correo(cfg, municipio.nombre, detalles, mensaje, usuario.get_full_name() or usuario.username)
+    corto = contexto["municipio_corto"]
+    asunto_defecto = f"Pagos InOva — {corto} — {timezone.localtime():%d-%m-%Y}"
+    msg = EmailMultiAlternatives(
+        (asunto or "").strip() or asunto_defecto, render_to_string("etl/email_exportacion.txt", contexto),
+        remitente, destinatarios, reply_to=[settings.EXPORT_REPLY_TO or parseaddr(remitente)[1] or remitente])
+    msg.attach_alternative(render_to_string("etl/email_exportacion.html", contexto), "text/html")
+    if contexto["con_logo"]:
+        correo.incrustar_logo(msg)
+    if contexto["con_firma"]:
+        incrustar_firma(msg, cfg)
     for nombre, contenido, mime in adjuntos:
         msg.attach(nombre, contenido, mime.split(";")[0])
 
@@ -136,7 +145,7 @@ def enviar(usuario, items, destinatarios_txt, asunto, mensaje):
         usuario=usuario, proceso=items[0]["proceso"], procesos=", ".join(nombres_proc)[:300],
         destinatarios=", ".join(destinatarios), asunto=msg.subject[:250],
         formato=formatos.pop() if len(formatos) == 1 else "mixto",
-        filtros="\n".join(lineas), adjuntos=", ".join(n for n, _, _ in adjuntos))
+        filtros="\n".join(f"{d['archivo']}: {d['filtros']}" for d in detalles), adjuntos=", ".join(n for n, _, _ in adjuntos))
     try:
         msg.send(fail_silently=False)
     except Exception as e:  # noqa: BLE001 - se registra y se explica al usuario
@@ -145,3 +154,52 @@ def enviar(usuario, items, destinatarios_txt, asunto, mensaje):
         raise EnvioError("No se pudo enviar el correo. Revisa la configuración de Brevo "
                          "(remitente verificado e IP autorizada).") from e
     return {"destinatarios": destinatarios, "adjuntos": [n for n, _, _ in adjuntos], "remitente": remitente}
+
+
+def aplicar_variables(texto, valores):
+    """Reemplaza {municipio}, {fecha}… sin fallar si el texto trae otras llaves."""
+    return re.sub(r"\{(\w+)\}", lambda m: str(valores.get(m.group(1), m.group(0))), texto or "")
+
+
+def _datos_firma(cfg):
+    """(bytes, subtipo) de la imagen de firma, o None si no hay o no se puede leer."""
+    if not cfg.firma_imagen:
+        return None
+    try:
+        from PIL import Image
+        with cfg.firma_imagen.open("rb") as f:
+            datos = f.read()
+        return datos, Image.open(BytesIO(datos)).format.lower()
+    except Exception:  # noqa: BLE001 - archivo faltante o dañado: el correo sale sin imagen
+        return None
+
+
+def incrustar_firma(msg, cfg):
+    d = _datos_firma(cfg)
+    if not d:
+        return False
+    msg.mixed_subtype = "related"
+    img = MIMEImage(d[0], _subtype=d[1])
+    img.add_header("Content-ID", "<firma>")
+    img.add_header("Content-Disposition", "inline", filename=f"firma.{d[1]}")
+    msg.attach(img)
+    return True
+
+
+def contexto_correo(cfg, municipio_nombre, detalles, mensaje_usuario, remitente_nombre, ahora=None):
+    """Datos con los que se dibuja el correo (también los usa la vista previa)."""
+    ahora = ahora or timezone.localtime()
+    with translation.override("es"):
+        fecha_larga = dateformat.format(ahora, r"j \d\e F \d\e Y")
+    corto = re.sub(r"^Municipio (de )?", "", municipio_nombre)
+    n = len(detalles)
+    adjuntos_txt = "el archivo de pagos que reposa" if n == 1 else f"los {n} archivos de pagos que reposan"
+    valores = {"municipio": corto, "fecha": fecha_larga, "hora": ahora.strftime("%H:%M"),
+               "adjuntos": adjuntos_txt, "n_archivos": n}
+    return {
+        "municipio": municipio_nombre, "municipio_corto": corto, "items": detalles,
+        "saludo": aplicar_variables(cfg.saludo, valores), "cuerpo": aplicar_variables(cfg.mensaje, valores),
+        "despedida": aplicar_variables(cfg.despedida, valores), "mensaje": (mensaje_usuario or "").strip(),
+        "firma_texto": (cfg.firma_texto or "").strip(), "con_firma": _datos_firma(cfg) is not None,
+        "remitente_nombre": remitente_nombre, "con_logo": correo.logo_disponible(),
+    }

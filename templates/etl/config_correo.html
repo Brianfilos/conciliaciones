@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Correo de reportes{% endblock %}
+{% block breadcrumb %} &rsaquo; <a href="{% url 'usuarios' %}">Usuarios</a> &rsaquo; <span>Correo de reportes</span>{% endblock %}
+{% block extra_css %}
+<style>
+  .cc-wrap { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; align-items:start; max-width:1250px; margin:0 auto; }
+  .cc-card { background:#fff; border:1px solid var(--border-subtle); border-radius:12px; box-shadow:var(--shadow-xs); padding:20px; }
+  .cc-card h2 { font-size:1rem; font-weight:600; margin:0 0 4px; }
+  .cc-help { font-size:.78rem; color:#64748b; }
+  .cc-tag { display:inline-block; background:#eef2f7; border-radius:6px; padding:0 6px; font-family:Consolas,monospace; font-size:.76rem; margin:0 2px 2px 0; }
+  .cc-frame { width:100%; height:760px; border:1px solid #e2e8f0; border-radius:10px; background:#f0f4f8; }
+  .cc-firma { max-width:100%; max-height:160px; border:1px solid #e2e8f0; border-radius:8px; display:block; margin:.5rem 0; }
+  @media (max-width: 992px) { .cc-wrap { grid-template-columns:minmax(0,1fr); } .cc-frame { height:620px; } }
+</style>
+{% endblock %}
+{% block content %}
+<div class="cc-wrap">
+  <form method="post" enctype="multipart/form-data" class="cc-card" novalidate>
+    {% csrf_token %}
+    <h2>Correo de reportes</h2>
+    <p class="cc-help mb-3">Lo que ven quienes reciben las exportaciones enviadas desde <em>Ver datos → Enviar por correo</em>.
+      Los cambios aplican al siguiente envío.</p>
+    {% if form.non_field_errors %}<div class="alert alert-danger small">{{ form.non_field_errors }}</div>{% endif %}
+
+    <div class="mb-3">
+      <label class="form-label small fw-semibold" for="{{ form.saludo.id_for_label }}">Saludo</label>
+      {{ form.saludo }}{% for e in form.saludo.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label small fw-semibold" for="{{ form.mensaje.id_for_label }}">Mensaje por defecto</label>
+      {{ form.mensaje }}{% for e in form.mensaje.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+      <div class="cc-help mt-1">Puedes usar estas variables, que se reemplazan solas al enviar:
+        <span class="cc-tag">{municipio}</span><span class="cc-tag">{fecha}</span><span class="cc-tag">{hora}</span>
+        <span class="cc-tag">{adjuntos}</span><span class="cc-tag">{n_archivos}</span>.
+        <br><span class="cc-tag">{adjuntos}</span> se convierte en «el archivo de pagos que reposa» o «los 3 archivos de pagos que reposan».</div>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label small fw-semibold" for="{{ form.despedida.id_for_label }}">Despedida</label>
+      {{ form.despedida }}{% for e in form.despedida.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label small fw-semibold" for="{{ form.firma_imagen.id_for_label }}">Firma (imagen)</label>
+      {% if cfg.firma_imagen %}
+        <div class="alert alert-light border small py-2 mb-2">Ya hay una firma cargada (mírala en la vista previa). Sube otra imagen para reemplazarla.
+          <label class="d-block mt-1"><input type="checkbox" name="quitar_firma"> Quitar la firma actual</label></div>
+      {% endif %}
+      {{ form.firma_imagen }}{% for e in form.firma_imagen.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+      <div class="cc-help mt-1">PNG o JPG de hasta 2 MB. Se incrusta al final del correo (recomendado: unos 600 px de ancho).</div>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label small fw-semibold" for="{{ form.firma_texto.id_for_label }}">Firma en texto (si no hay imagen)</label>
+      {{ form.firma_texto }}{% for e in form.firma_texto.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+    </div>
+
+    <div class="d-flex gap-2 align-items-center flex-wrap">
+      <button class="btn btn-primary" type="submit">Guardar cambios</button>
+      <button class="btn btn-outline-secondary" type="submit" name="restablecer" value="1"
+              onclick="return confirm('¿Volver al saludo, mensaje y despedida originales? La firma no se toca.');">Restablecer textos</button>
+      <a href="{% url 'usuarios' %}" class="btn btn-link">Volver</a>
+    </div>
+    {% if cfg.actualizado %}<div class="cc-help mt-3">Última actualización: {{ cfg.actualizado|date:"d/m/Y H:i" }}{% if cfg.actualizado_por %} por {{ cfg.actualizado_por.username }}{% endif %}.</div>{% endif %}
+  </form>
+
+  <div class="cc-card">
+    <h2>Vista previa</h2>
+    <p class="cc-help mb-2">Así se verá el correo (con datos de ejemplo). Se actualiza al guardar.</p>
+    <iframe class="cc-frame" src="{% url 'config_correo_vista' %}?t={{ cfg.actualizado|date:'U' }}" title="Vista previa del correo"></iframe>
+  </div>
+</div>
+{% endblock %}

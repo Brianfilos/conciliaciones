@@ -128,3 +128,30 @@ class EnvioExportacion(models.Model):
 
     def __str__(self):
         return f"{self.fecha:%d/%m/%Y %H:%M} · {self.usuario} → {self.destinatarios}"
+
+
+MENSAJE_CORREO_DEFECTO = ("Se envía {adjuntos} en el sistema de información InOva del municipio de {municipio}, "
+                          "con corte al {fecha} a las {hora}.")
+DESPEDIDA_CORREO_DEFECTO = "Quedamos atentos a cualquier inquietud. Puedes responder este mensaje."
+
+
+class ConfiguracionEnvio(models.Model):
+    """Textos y firma de los correos con exportaciones. Una sola fila (pk=1), editable por el superusuario."""
+    saludo = models.CharField(max_length=120, default="Cordial saludo,")
+    mensaje = models.TextField(default=MENSAJE_CORREO_DEFECTO)
+    despedida = models.TextField(default=DESPEDIDA_CORREO_DEFECTO, blank=True)
+    firma_imagen = models.ImageField(upload_to="firma/", blank=True)
+    firma_texto = models.TextField(blank=True)
+    actualizado = models.DateTimeField(auto_now=True)
+    actualizado_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                        on_delete=models.SET_NULL, related_name="+")
+
+    class Meta:
+        verbose_name = "configuración del correo de reportes"
+
+    @classmethod
+    def obtener(cls):
+        return cls.objects.get_or_create(pk=1)[0]
+
+    def __str__(self):
+        return "Configuración del correo de reportes"

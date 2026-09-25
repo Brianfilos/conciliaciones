@@ -52,6 +52,21 @@ def limpiar_temporal(usuario):
     usuario.password_temporal_expira = None
 
 
+def logo_disponible():
+    return (Path(settings.BASE_DIR) / "static" / "img" / "marca" / "logo-gobs-blanco.png").exists()
+
+
+def incrustar_logo(msg):
+    """Incrusta el logo de GOBS (blanco) en el mensaje con Content-ID «logo-gobs»: se ve aunque el
+    cliente de correo bloquee imágenes remotas. En el HTML se usa <img src="cid:logo-gobs">."""
+    logo = Path(settings.BASE_DIR) / "static" / "img" / "marca" / "logo-gobs-blanco.png"
+    msg.mixed_subtype = "related"
+    img = MIMEImage(logo.read_bytes(), _subtype="png")
+    img.add_header("Content-ID", "<logo-gobs>")
+    img.add_header("Content-Disposition", "inline", filename="logo-gobs.png")
+    msg.attach(img)
+
+
 def enviar_temporal(usuario, plano, motivo="recuperacion"):
     """Envía el correo con la contraseña temporal. Devuelve True si el servidor de correo lo aceptó."""
     logo = Path(settings.BASE_DIR) / "static" / "img" / "marca" / "logo-gobs-blanco.png"
@@ -66,12 +81,7 @@ def enviar_temporal(usuario, plano, motivo="recuperacion"):
         settings.DEFAULT_FROM_EMAIL, [usuario.email])
     msg.attach_alternative(render_to_string("accounts/email_temporal.html", ctx), "text/html")
     if ctx["con_logo"]:
-        # Logo incrustado en el mensaje (cid): se ve aunque el cliente bloquee imágenes remotas
-        msg.mixed_subtype = "related"
-        img = MIMEImage(logo.read_bytes(), _subtype="png")
-        img.add_header("Content-ID", "<logo-gobs>")
-        img.add_header("Content-Disposition", "inline", filename="logo-gobs-blanco.png")
-        msg.attach(img)
+        incrustar_logo(msg)
     try:
         msg.send(fail_silently=False)
         return True

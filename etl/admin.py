@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import EnvioExportacion, Proceso, InsumoDefinicion, Ejecucion, EncabezadoCXC, DetalleCXC, InsumoEjecucion
+from .models import ConfiguracionEnvio, EnvioExportacion, Proceso, InsumoDefinicion, Ejecucion, EncabezadoCXC, DetalleCXC, InsumoEjecucion
 
 class InsumoInline(admin.TabularInline):
     model = InsumoDefinicion
@@ -35,3 +35,8 @@ class EnvioExportacionAdmin(admin.ModelAdmin):
     list_filter = ["ok", "formato"]
     search_fields = ["destinatarios", "usuario__username", "procesos"]
     readonly_fields = [f.name for f in EnvioExportacion._meta.fields]
+
+
+@admin.register(ConfiguracionEnvio)
+class ConfiguracionEnvioAdmin(admin.ModelAdmin):
+    list_display = ["__str__", "actualizado", "actualizado_por"]

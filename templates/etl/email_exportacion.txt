@@ -1,0 +1,19 @@
+{% autoescape off %}{{ saludo }}
+
+{{ cuerpo }}
+{% if mensaje %}
+{{ mensaje }}
+{% endif %}
+{% if items|length > 1 %}Archivos adjuntos ({{ items|length }}){% else %}Archivo adjunto{% endif %}:
+{% for it in items %}
+ - {{ it.archivo }}
+   {{ it.proceso }} · {{ it.contenido }} · {{ it.formato }}{% if it.registros %} · {{ it.registros }} registros{% endif %}
+   Filtros aplicados: {{ it.filtros }}
+{% endfor %}
+{% if despedida %}{{ despedida }}
+{% endif %}{% if firma_texto %}
+{{ firma_texto }}
+{% endif %}
+Enviado por {{ remitente_nombre }} desde el Sistema de CXC · GOBS Estrategias Públicas.
+La información contiene datos de contribuyentes: manéjala de forma confidencial.
+{% endautoescape %}

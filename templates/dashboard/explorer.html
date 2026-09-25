@@ -801,11 +801,11 @@
         </div>
         <div class="mb-3">
           <label class="form-label small fw-semibold" for="mc-asunto">Asunto</label>
-          <input id="mc-asunto" name="asunto" class="form-control" value="Reporte {{ proceso.municipio.nombre }} — {{ proceso.nombre }}">
+          <input id="mc-asunto" name="asunto" class="form-control" value="Pagos InOva — {{ proceso.municipio.nombre }} — {% now 'd-m-Y' %}">
         </div>
         <div class="mb-1">
           <label class="form-label small fw-semibold" for="mc-msg">Mensaje (opcional)</label>
-          <textarea id="mc-msg" name="mensaje" rows="3" class="form-control" placeholder="Adjunto el reporte solicitado."></textarea>
+          <textarea id="mc-msg" name="mensaje" rows="3" class="form-control" placeholder="Opcional: se agrega debajo del saludo. El correo ya incluye el texto formal y la lista de archivos."></textarea>
         </div>
       </div>
       <div class="modal-footer">
