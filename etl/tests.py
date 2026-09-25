@@ -36,83 +36,134 @@ class EnvioExportacionTests(TestCase):
         self.p2 = Proceso.objects.create(municipio=self.mun, codigo="CXC_RETE", nombre="Retención ICA")
         self.user = User.objects.create_user("op", "op@example.com", "Operador#2026", municipio=self.mun, rol="OPERADOR")
         self.ajeno = User.objects.create_user("aj", "aj@example.com", "Ajeno#2026", municipio=self.otro_mun, rol="OPERADOR")
-        u = self.user
         for p in (self.p1, self.p2):
-            ej = Ejecucion.objects.create(proceso=p, usuario=u)
+            ej = Ejecucion.objects.create(proceso=p, usuario=self.user)
             _crear_encabezado(p, ej, "1001", "✓ PAGO REALIZADO", 1000, "Ana SAS")
             _crear_encabezado(p, ej, "1002", "PENDIENTE DE PAGO", 2000, "Beto SAS")
-        self.url = reverse("exportar_correo", args=[self.p1.id])
         self.client.force_login(self.user)
 
-    def _post(self, **extra):
-        datos = {"destinatarios": "cliente@example.com", "formato": "excel", "tab": "encabezado", "filtros": ""}
+    def _enviar(self, proceso=None, **extra):
+        proceso = proceso or self.p1
+        datos = {"destinatarios": "cliente@example.com", "formato_actual": "excel", "tab": "encabezado",
+                 "filtros": "", "incluir_actual": "1"}
         datos.update(extra)
-        return self.client.post(self.url, datos)
+        return self.client.post(reverse("exportar_correo", args=[proceso.id]), datos)
+
+    def _agregar(self, proceso, **extra):
+        datos = {"tab": "encabezado", "filtros": "", "formato_actual": "csv", "registros": "2"}
+        datos.update(extra)
+        return self.client.post(reverse("envio_agregar", args=[proceso.id]), datos)
 
     def test_envia_excel_con_remitente_configurado(self):
-        r = self._post()
+        r = self._enviar()
         self.assertEqual(r.status_code, 302)
-        self.assertEqual(len(mail.outbox), 1)
         m = mail.outbox[0]
         self.assertEqual(m.from_email, "Brian Filos <brian.filos@gobs.com.co>")
         self.assertEqual(m.reply_to, ["brian.filos@gobs.com.co"])
         self.assertEqual(m.to, ["cliente@example.com"])
-        self.assertEqual(len(m.attachments), 1)
-        nombre, contenido, mime = m.attachments[0]
+        nombre, contenido, _ = m.attachments[0]
         self.assertTrue(nombre.endswith(".xlsx"))
-        self.assertTrue(contenido.startswith(b"PK"))  # un .xlsx es un zip
+        self.assertTrue(contenido.startswith(b"PK"))
         reg = EnvioExportacion.objects.get()
         self.assertTrue(reg.ok)
         self.assertEqual(reg.usuario, self.user)
 
     def test_el_adjunto_es_igual_a_la_descarga_con_los_mismos_filtros(self):
-        filtros = "estado_pago=PENDIENTE"
-        self._post(formato="csv", filtros=filtros)
+        self._enviar(formato_actual="csv", filtros="estado_pago=PENDIENTE")
         adjunto = _texto(mail.outbox[0].attachments[0][1])
-        descarga = self.client.get(reverse("exportar", args=[self.p1.id]), {"format": "csv", "tab": "encabezado", "estado_pago": "PENDIENTE"})
+        descarga = self.client.get(reverse("exportar", args=[self.p1.id]),
+                                   {"format": "csv", "tab": "encabezado", "estado_pago": "PENDIENTE"})
         self.assertEqual(adjunto.strip(), _texto(descarga.content).strip())
         self.assertIn("Beto SAS", adjunto)
         self.assertNotIn("Ana SAS", adjunto)
 
-    def test_varios_procesos_en_un_solo_correo(self):
-        self._post(formato="csv", otros=[str(self.p2.id)])
+    def test_tres_vistas_con_filtros_distintos_en_un_solo_correo(self):
+        # Se filtra y se agrega el primer proceso, luego se abre el segundo y se envía todo junto
+        self._agregar(self.p1, filtros="estado_pago=PENDIENTE", formato_actual="csv")
+        self.assertEqual(len(self.client.session["cola_envio"]), 1)
+        self._enviar(self.p2, formato_actual="txt", filtros="estado_pago=PAGO+REALIZADO", mensaje="Va todo junto")
+        self.assertEqual(len(mail.outbox), 1)
         m = mail.outbox[0]
         self.assertEqual(len(m.attachments), 2)
+        por_nombre = {n: _texto(c) for n, c, _ in m.attachments}
+        auto = next(v for n, v in por_nombre.items() if "CXC_AUTO" in n)
+        rete = next(v for n, v in por_nombre.items() if "CXC_RETE" in n)
+        self.assertIn("Beto SAS", auto)       # cada adjunto conserva SU filtro
+        self.assertNotIn("Ana SAS", auto)
+        self.assertIn("Ana SAS", rete)
+        self.assertNotIn("Beto SAS", rete)
         self.assertIn("Autorretención", m.body)
         self.assertIn("Retención ICA", m.body)
+        self.assertIn("Va todo junto", m.body)
+        self.assertEqual(self.client.session["cola_envio"], {})  # la cola se vacía al enviar
 
-    def test_varios_destinatarios_y_mensaje(self):
-        self._post(destinatarios="a@example.com; b@example.com  c@example.com", mensaje="Revisar por favor", asunto="Mi asunto")
+    def test_solo_la_cola_sin_la_vista_actual(self):
+        self._agregar(self.p1)
+        self.client.post(reverse("exportar_correo", args=[self.p2.id]),
+                         {"destinatarios": "a@example.com", "tab": "encabezado", "filtros": ""})
+        self.assertEqual(len(mail.outbox[0].attachments), 1)
+        self.assertIn("CXC_AUTO", mail.outbox[0].attachments[0][0])
+
+    def test_quitar_y_vaciar(self):
+        self._agregar(self.p1)
+        self._agregar(self.p2)
+        self.client.post(reverse("envio_quitar"), {"clave": f"{self.p1.id}:encabezado"})
+        self.assertEqual(list(self.client.session["cola_envio"]), [f"{self.p2.id}:encabezado"])
+        self.client.post(reverse("envio_quitar"), {"vaciar": "1"})
+        self.assertEqual(self.client.session["cola_envio"], {})
+
+    def test_si_falla_el_envio_la_cola_se_conserva(self):
+        self._agregar(self.p1)
+        self.client.post(reverse("exportar_correo", args=[self.p2.id]), {"destinatarios": "correo-malo", "tab": "encabezado"})
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertEqual(len(self.client.session["cola_envio"]), 1)
+
+    def test_nada_que_enviar(self):
+        self.client.post(reverse("exportar_correo", args=[self.p1.id]), {"destinatarios": "a@example.com", "tab": "encabezado"})
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_varios_destinatarios_y_asunto(self):
+        self._enviar(destinatarios="a@example.com; b@example.com  c@example.com", asunto="Mi asunto")
         m = mail.outbox[0]
         self.assertEqual(m.to, ["a@example.com", "b@example.com", "c@example.com"])
         self.assertEqual(m.subject, "Mi asunto")
-        self.assertIn("Revisar por favor", m.body)
 
     def test_correo_invalido_y_demasiados(self):
-        self._post(destinatarios="no-es-un-correo")
-        self.assertEqual(len(mail.outbox), 0)
-        self._post(destinatarios=",".join(f"u{i}@example.com" for i in range(11)))
+        self._enviar(destinatarios="no-es-un-correo")
+        self._enviar(destinatarios=",".join(f"u{i}@example.com" for i in range(11)))
         self.assertEqual(len(mail.outbox), 0)
 
-    def test_otro_municipio_no_puede_enviar(self):
+    def test_otro_municipio_no_puede_enviar_ni_agregar(self):
         self.client.force_login(self.ajeno)
-        self._post()
+        self._enviar()
+        self._agregar(self.p1)
         self.assertEqual(len(mail.outbox), 0)
         self.assertEqual(EnvioExportacion.objects.count(), 0)
+        self.assertEqual(self.client.session.get("cola_envio", {}), {})
 
-    def test_no_se_pueden_adjuntar_procesos_de_otro_municipio(self):
-        ajeno_p = Proceso.objects.create(municipio=self.otro_mun, codigo="CXC_AUTO", nombre="Ajeno")
-        self._post(otros=[str(ajeno_p.id)])
-        self.assertEqual(len(mail.outbox[0].attachments), 1)
+    def test_la_cola_no_mezcla_municipios(self):
+        root = User.objects.create_superuser("root", "root@example.com", "Root#2026")
+        p_otro = Proceso.objects.create(municipio=self.otro_mun, codigo="CXC_AUTO", nombre="Auto otro")
+        self.client.force_login(root)
+        self._agregar(self.p1)
+        self._agregar(p_otro)
+        self.assertEqual(len(self.client.session["cola_envio"]), 1)
+
+    def test_maximo_de_adjuntos(self):
+        from etl.services.envio_exportaciones import MAX_ITEMS
+        for i in range(MAX_ITEMS + 2):
+            p = Proceso.objects.create(municipio=self.mun, codigo=f"X{i}", nombre=f"Extra {i}")
+            self._agregar(p)
+        self.assertEqual(len(self.client.session["cola_envio"]), MAX_ITEMS)
 
     @override_settings(EXPORT_MAX_ADJUNTOS_MB=0)
     def test_limite_de_tamano(self):
-        self._post()
+        self._enviar()
         self.assertEqual(len(mail.outbox), 0)
 
     def test_anonimo_va_al_login(self):
         self.client.logout()
-        self.assertEqual(self._post().status_code, 302)
+        self.assertEqual(self._enviar().status_code, 302)
         self.assertEqual(len(mail.outbox), 0)
 
 
@@ -127,10 +178,19 @@ class EnvioSabanetaTests(TestCase):
         _crear_encabezado(p, ej, "11", "Pendiente de pago", 700, "Debe SAS")
         self.client.force_login(u)
         self.client.post(reverse("exportar_correo", args=[p.id]),
-                         {"destinatarios": "x@example.com", "formato": "csv", "tab": "encabezado", "filtros": ""})
+                         {"destinatarios": "x@example.com", "formato_actual": "csv", "tab": "encabezado",
+                          "filtros": "", "incluir_actual": "1"})
         adjunto = _texto(mail.outbox[0].attachments[0][1])
         self.assertIn("Pagó SAS", adjunto)
         self.assertNotIn("Debe SAS", adjunto)
+
+
+class FiltrosLegiblesTests(TestCase):
+    def test_resumen(self):
+        from etl.services.envio_exportaciones import etiqueta_filtros
+        self.assertEqual(etiqueta_filtros("tab=encabezado&estado_pago=PENDIENTE&fecha_desde=2026-01-01&q="),
+                         "pago: PENDIENTE · desde: 2026-01-01")
+        self.assertEqual(etiqueta_filtros(""), "sin filtros")
 
 
 class ExplorerHtmlTests(TestCase):

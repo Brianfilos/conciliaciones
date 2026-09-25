@@ -61,6 +61,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'muni.context_processors.municipio_context',
+                'etl.context_processors.cola_envio',
             ],
             'libraries': {
                 'etl_extras': 'etl.templatetags.etl_extras',
