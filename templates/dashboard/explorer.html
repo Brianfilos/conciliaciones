@@ -101,62 +101,6 @@
     </div>
   </div>
 
-<!-- Enviar exportación por correo -->
-<div class="modal fade" id="modal-correo" tabindex="-1" aria-labelledby="modal-correo-t" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-scrollable">
-    <form method="post" action="{% url 'exportar_correo' proceso.id %}" class="modal-content" onsubmit="var b=this.querySelector('[type=submit]');setTimeout(function(){b.disabled=true;b.textContent='Enviando…';},0);">
-      {% csrf_token %}
-      <input type="hidden" name="tab" value="{{ tab }}">
-      <input type="hidden" name="filtros" value="{{ export_filter_qs }}">
-      <input type="hidden" name="next" value="{{ request.get_full_path }}">
-      <div class="modal-header">
-        <h5 class="modal-title" id="modal-correo-t"><i class="bi bi-envelope-arrow-up me-2"></i>Enviar por correo</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-      </div>
-      <div class="modal-body">
-        <div class="alert alert-light border small py-2">
-          Se adjunta el mismo archivo que descargarías con los <strong>filtros que tienes aplicados</strong>
-          ({{ total_filtrado }} registros en este proceso). Remitente: <strong>{{ export_from_email }}</strong>.
-        </div>
-        <div class="mb-3">
-          <label class="form-label small fw-semibold" for="mc-dest">Para</label>
-          <input id="mc-dest" name="destinatarios" class="form-control" placeholder="correo@ejemplo.com, otro@ejemplo.com" required>
-          <div class="form-text">Separa varios correos con coma (máximo 10).</div>
-        </div>
-        <div class="mb-3">
-          <label class="form-label small fw-semibold" for="mc-asunto">Asunto</label>
-          <input id="mc-asunto" name="asunto" class="form-control" value="Reporte {{ proceso.municipio.nombre }} — {{ proceso.nombre }}">
-        </div>
-        <div class="mb-3">
-          <label class="form-label small fw-semibold" for="mc-msg">Mensaje (opcional)</label>
-          <textarea id="mc-msg" name="mensaje" rows="3" class="form-control" placeholder="Adjunto el reporte solicitado."></textarea>
-        </div>
-        <div class="mb-3">
-          <div class="form-label small fw-semibold">Formato</div>
-          <div class="d-flex gap-3">
-            <label class="small"><input type="radio" name="formato" value="excel" checked> Excel</label>
-            <label class="small"><input type="radio" name="formato" value="csv"> CSV</label>
-            <label class="small"><input type="radio" name="formato" value="txt"> TXT</label>
-          </div>
-        </div>
-        {% with otros=proceso.municipio.procesos.all %}
-        <div class="mb-1">
-          <div class="form-label small fw-semibold">Adjuntar también (opcional)</div>
-          {% for p in otros %}{% if p.activo and p.id != proceso.id %}
-            <label class="d-block small"><input type="checkbox" name="otros" value="{{ p.id }}"> {{ p.nombre }}</label>
-          {% endif %}{% endfor %}
-          <div class="form-text">Los procesos adicionales usan solo los filtros de fecha, estado y tipo de documento.</div>
-        </div>
-        {% endwith %}
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-        <button type="submit" class="btn btn-primary"><i class="bi bi-send me-1"></i>Enviar</button>
-      </div>
-    </form>
-  </div>
-</div>
-
 <!-- TABLE -->
 <div class="card shadow-sm">
   <div class="table-responsive">
@@ -787,6 +731,64 @@
 {% endif %}
 
 </form>
+
+<!-- Enviar exportación por correo (fuera del formulario de filtros: los formularios no se anidan) -->
+<div class="modal fade" id="modal-correo" tabindex="-1" aria-labelledby="modal-correo-t" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable">
+    <form method="post" action="{% url 'exportar_correo' proceso.id %}" class="modal-content" onsubmit="var b=this.querySelector('[type=submit]');setTimeout(function(){b.disabled=true;b.textContent='Enviando…';},0);">
+      {% csrf_token %}
+      <input type="hidden" name="tab" value="{{ tab }}">
+      <input type="hidden" name="filtros" value="{{ export_filter_qs }}">
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modal-correo-t"><i class="bi bi-envelope-arrow-up me-2"></i>Enviar por correo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-light border small py-2">
+          Se adjunta el mismo archivo que descargarías con los <strong>filtros que tienes aplicados</strong>
+          ({{ total_filtrado }} registros en este proceso). Remitente: <strong>{{ export_from_email }}</strong>.
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-semibold" for="mc-dest">Para</label>
+          <input id="mc-dest" name="destinatarios" class="form-control" placeholder="correo@ejemplo.com, otro@ejemplo.com" required>
+          <div class="form-text">Separa varios correos con coma (máximo 10).</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-semibold" for="mc-asunto">Asunto</label>
+          <input id="mc-asunto" name="asunto" class="form-control" value="Reporte {{ proceso.municipio.nombre }} — {{ proceso.nombre }}">
+        </div>
+        <div class="mb-3">
+          <label class="form-label small fw-semibold" for="mc-msg">Mensaje (opcional)</label>
+          <textarea id="mc-msg" name="mensaje" rows="3" class="form-control" placeholder="Adjunto el reporte solicitado."></textarea>
+        </div>
+        <div class="mb-3">
+          <div class="form-label small fw-semibold">Formato</div>
+          <div class="d-flex gap-3">
+            <label class="small"><input type="radio" name="formato" value="excel" checked> Excel</label>
+            <label class="small"><input type="radio" name="formato" value="csv"> CSV</label>
+            <label class="small"><input type="radio" name="formato" value="txt"> TXT</label>
+          </div>
+        </div>
+        {% with otros=proceso.municipio.procesos.all %}
+        <div class="mb-1">
+          <div class="form-label small fw-semibold">Adjuntar también (opcional)</div>
+          {% for p in otros %}{% if p.activo and p.id != proceso.id %}
+            <label class="d-block small"><input type="checkbox" name="otros" value="{{ p.id }}"> {{ p.nombre }}</label>
+          {% endif %}{% endfor %}
+          <div class="form-text">Los procesos adicionales usan solo los filtros de fecha, estado y tipo de documento.</div>
+        </div>
+        {% endwith %}
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-send me-1"></i>Enviar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
 
 {% endblock %}
 

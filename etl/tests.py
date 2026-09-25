@@ -131,3 +131,37 @@ class EnvioSabanetaTests(TestCase):
         adjunto = _texto(mail.outbox[0].attachments[0][1])
         self.assertIn("Pagó SAS", adjunto)
         self.assertNotIn("Debe SAS", adjunto)
+
+
+class ExplorerHtmlTests(TestCase):
+    def test_el_formulario_de_correo_no_esta_anidado_en_el_de_filtros(self):
+        """Un <form> dentro de otro lo descarta el navegador y sus campos pasan a bloquear los filtros."""
+        from html.parser import HTMLParser
+
+        class Anidados(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.pila, self.maxima, self.filtros_con_campos_de_correo = [], 0, False
+
+            def handle_starttag(self, tag, attrs):
+                a = dict(attrs)
+                if tag == "form":
+                    self.pila.append(a.get("id") or a.get("action", ""))
+                    self.maxima = max(self.maxima, len(self.pila))
+                if tag in ("input", "textarea") and "filter-form" in self.pila and a.get("name") in ("destinatarios", "csrfmiddlewaretoken"):
+                    self.filtros_con_campos_de_correo = True
+
+            def handle_endtag(self, tag):
+                if tag == "form" and self.pila:
+                    self.pila.pop()
+
+        mun = Municipio.objects.create(codigo="TEST", nombre="Municipio de Prueba")
+        p = Proceso.objects.create(municipio=mun, codigo="CXC_AUTO", nombre="Autorretención")
+        u = User.objects.create_user("adm", "adm@example.com", "Admin#2026", municipio=mun, rol="ADMIN")
+        self.client.force_login(u)
+        html = self.client.get(reverse("dashboard", args=[p.id])).content.decode()
+        self.assertIn('id="modal-correo"', html)
+        analizador = Anidados()
+        analizador.feed(html)
+        self.assertEqual(analizador.maxima, 1, "hay formularios anidados")
+        self.assertFalse(analizador.filtros_con_campos_de_correo)
