@@ -2,6 +2,8 @@
 import logging
 import secrets
 from datetime import timedelta
+from email.mime.image import MIMEImage
+from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth.hashers import make_password
@@ -51,15 +53,24 @@ def limpiar_temporal(usuario):
 
 def enviar_temporal(usuario, plano, motivo="recuperacion"):
     """Envía el correo con la contraseña temporal. Devuelve True si el servidor de correo lo aceptó."""
+    logo = Path(settings.BASE_DIR) / "static" / "img" / "marca" / "logo-gobs.png"
     ctx = {
         "usuario": usuario, "temporal": plano, "horas": settings.PASSWORD_TEMPORAL_HORAS,
         "login_url": settings.SITE_URL.rstrip("/") + "/login/", "motivo": motivo,
+        "con_logo": logo.exists(),
     }
     asunto = ("Tu acceso al Sistema de CXC" if motivo == "alta" else "Contraseña temporal — Sistema de CXC")
     msg = EmailMultiAlternatives(
         asunto, render_to_string("accounts/email_temporal.txt", ctx),
         settings.DEFAULT_FROM_EMAIL, [usuario.email])
     msg.attach_alternative(render_to_string("accounts/email_temporal.html", ctx), "text/html")
+    if ctx["con_logo"]:
+        # Logo incrustado en el mensaje (cid): se ve aunque el cliente bloquee imágenes remotas
+        msg.mixed_subtype = "related"
+        img = MIMEImage(logo.read_bytes(), _subtype="png")
+        img.add_header("Content-ID", "<logo-gobs>")
+        img.add_header("Content-Disposition", "inline", filename="logo-gobs.png")
+        msg.attach(img)
     try:
         msg.send(fail_silently=False)
         return True

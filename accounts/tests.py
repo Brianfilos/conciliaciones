@@ -31,6 +31,10 @@ class RecuperacionTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ["ana@example.com"])
         self.assertIn("ana", mail.outbox[0].body)
+        # versión HTML con el logo de GOBS incrustado
+        html = mail.outbox[0].alternatives[0][0]
+        self.assertIn("cid:logo-gobs", html)
+        self.assertEqual(len(mail.outbox[0].attachments), 1)
 
     def test_correo_desconocido_no_revela_nada(self):
         r = self._pedir("nadie@example.com")
