@@ -426,3 +426,40 @@ class ConfiguracionCorreoTests(TestCase):
         self.assertContains(r, "Copacabana")
         self.assertNotContains(r, "cid:")            # los cid se sustituyen por imágenes incrustadas en la página
         self.assertEqual(r.headers.get("X-Frame-Options"), "SAMEORIGIN")
+
+
+class SubidasSeguridadTests(TestCase):
+    def setUp(self):
+        from etl.models import InsumoDefinicion
+        self.mun = Municipio.objects.create(codigo="SUB", nombre="Municipio Subidas")
+        self.p = Proceso.objects.create(municipio=self.mun, codigo="CXC_AUTO", nombre="Autorretención")
+        InsumoDefinicion.objects.create(proceso=self.p, nombre="Archivo CXC", nombre_campo="cxc_csv",
+                                        tipo="CARGUE", extensiones=".csv", orden=1)
+        self.u = User.objects.create_user("op", "op@example.com", "Operador#2026", municipio=self.mun, rol="OPERADOR")
+
+    def test_rechaza_extension_no_declarada(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.client.force_login(self.u)
+        r = self.client.post(reverse("ejecutar_proceso", args=[self.p.id]),
+                             {"cxc_csv": SimpleUploadedFile("malo.php", b"<?php ?>")})
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, "Formato no permitido")
+        self.assertFalse(Ejecucion.objects.filter(proceso=self.p).exists())
+
+    def test_rechaza_archivo_demasiado_grande(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.client.force_login(self.u)
+        with override_settings(UPLOAD_MAX_MB=0):
+            r = self.client.post(reverse("ejecutar_proceso", args=[self.p.id]),
+                                 {"cxc_csv": SimpleUploadedFile("a.csv", b"a;b\n1;2\n")})
+        self.assertContains(r, "pesa más de")
+        self.assertFalse(Ejecucion.objects.filter(proceso=self.p).exists())
+
+    def test_firma_con_tipo_falso_se_rechaza(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from etl.forms import ConfiguracionEnvioForm
+        f = ConfiguracionEnvioForm(
+            {"saludo": "Hola", "mensaje": "x", "despedida": "y"},
+            {"firma_imagen": SimpleUploadedFile("firma.png", b"<svg onload=alert(1)>", content_type="image/png")})
+        self.assertFalse(f.is_valid())
+        self.assertIn("firma_imagen", f.errors)

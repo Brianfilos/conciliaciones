@@ -6,10 +6,11 @@ from django.core.exceptions import PermissionDenied
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 
 from muni.models import Municipio
-from . import correo
+from . import correo, seguridad
 from .forms import CambiarPasswordForm, LoginForm, RecuperarForm, UsuarioForm
 
 User = get_user_model()
@@ -23,9 +24,16 @@ class LoginView(View):
         return render(request, 'login.html', {'form': form})
 
     def post(self, request):
+        nombre = request.POST.get('username', '').strip()
+        if seguridad.bloqueado(request, nombre):
+            # Ni se revisa la contraseña: así la fuerza bruta no obtiene ninguna pista
+            aviso = (f'Demasiados intentos fallidos. Espera {settings.LOGIN_VENTANA_MIN} minutos '
+                     'e inténtalo de nuevo, o usa «¿Olvidó su contraseña?».')
+            return render(request, 'login.html', {'form': LoginForm(request), 'bloqueo': aviso}, status=429)
         form = LoginForm(request, data=request.POST)
         if form.is_valid():
             usuario = form.get_user()
+            seguridad.limpiar(usuario.username)
             if getattr(usuario, '_con_temporal', False):
                 # Entró con la contraseña temporal: debe elegir una nueva antes de seguir
                 usuario.debe_cambiar_password = True
@@ -35,8 +43,12 @@ class LoginView(View):
                 correo.limpiar_temporal(usuario)
                 usuario.save(update_fields=['password_temporal', 'password_temporal_expira'])
             login(request, usuario)
-            next_url = request.GET.get('next', 'municipio_home')
+            next_url = request.GET.get('next', '')
+            if not url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()},
+                                                   require_https=request.is_secure()):
+                next_url = 'municipio_home'
             return redirect(next_url)
+        seguridad.registrar_fallo(request, nombre)
         return render(request, 'login.html', {'form': form})
 
 

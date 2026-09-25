@@ -10,6 +10,7 @@ def municipio_context(request):
         'fuente_principal': 'Montserrat, sans-serif',
         'municipio_actual': None,
         'export_from_email': settings.EXPORT_FROM_EMAIL,
+        'SESION_POR_PESTANA': settings.SESION_POR_PESTANA,
         'logo_url': None,
     }
     if request.user.is_authenticated and hasattr(request.user, 'municipio') and request.user.municipio:

@@ -43,6 +43,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'accounts.middleware.ForzarCambioPasswordMiddleware',
+    'accounts.middleware.CabecerasSeguridadMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -94,7 +95,8 @@ LOGOUT_REDIRECT_URL = '/login/'
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+     'OPTIONS': {'min_length': 10}},
     {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
@@ -150,3 +152,38 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ── Seguridad ────────────────────────────────────────────────────────────────
+# Sesión: la cookie muere al cerrar el navegador y, además, caduca por inactividad.
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_COOKIE_AGE = config('SESION_INACTIVIDAD_MIN', default=60, cast=int) * 60
+SESSION_SAVE_EVERY_REQUEST = True  # cada petición renueva el plazo: es inactividad, no duración total
+# Cierra la sesión si se abre el sitio en una pestaña nueva (ver templates/base.html)
+SESION_POR_PESTANA = config('SESION_POR_PESTANA', default=True, cast=bool)
+
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
+# Cookies solo por HTTPS (en local con DEBUG=True siguen funcionando por http)
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+# HSTS: el navegador recuerda que este sitio solo se abre por HTTPS
+SECURE_HSTS_SECONDS = config('SECURE_HSTS_SECONDS', default=0 if DEBUG else 31536000, cast=int)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=False, cast=bool)
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = 'same-origin'
+X_FRAME_OPTIONS = 'DENY'
+
+# Tamaño máximo de una petición sin archivos y de cada archivo subido a memoria
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 2000
+UPLOAD_MAX_MB = config('UPLOAD_MAX_MB', default=60, cast=int)
+
+# Ruta del panel /django-admin/. Cambiarla la hace menos evidente para los bots.
+ADMIN_URL = config('ADMIN_URL', default='django-admin/')
+
+# Límite de intentos fallidos de ingreso (ventana en minutos)
+LOGIN_VENTANA_MIN = config('LOGIN_VENTANA_MIN', default=15, cast=int)
+LOGIN_MAX_INTENTOS_USUARIO = config('LOGIN_MAX_INTENTOS_USUARIO', default=6, cast=int)
+LOGIN_MAX_INTENTOS_IP = config('LOGIN_MAX_INTENTOS_IP', default=20, cast=int)

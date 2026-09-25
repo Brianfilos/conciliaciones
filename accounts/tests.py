@@ -184,3 +184,72 @@ class AdministracionUsuariosTests(TestCase):
         self.client.post(reverse("usuario_accion", args=[self.op.pk]), {"accion": "temporal"})
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to, ["op@example.com"])
+
+
+class SeguridadLoginTests(TestCase):
+    def setUp(self):
+        self.mun = Municipio.objects.create(codigo="SEG", nombre="Municipio Seguridad")
+        self.u = User.objects.create_user("luis", "luis@example.com", "ClaveSegura#2026", municipio=self.mun)
+
+    def _login(self, clave, usuario="luis", **extra):
+        return self.client.post(reverse("login"), {"username": usuario, "password": clave}, **extra)
+
+    def test_bloquea_tras_demasiados_fallos_aunque_luego_acierte(self):
+        for _ in range(6):
+            self.assertEqual(self._login("mala").status_code, 200)
+        r = self._login("ClaveSegura#2026")
+        self.assertEqual(r.status_code, 429)
+        self.assertContains(r, "Demasiados intentos", status_code=429)
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_ingreso_correcto_reinicia_el_contador(self):
+        for _ in range(3):
+            self._login("mala")
+        self.assertEqual(self._login("ClaveSegura#2026").status_code, 302)
+        self.client.logout()
+        for _ in range(5):
+            self._login("mala")
+        self.assertEqual(self._login("ClaveSegura#2026").status_code, 302)
+
+    def test_bloqueo_por_ip_con_usuarios_distintos(self):
+        for i in range(20):
+            self._login("x", usuario=f"inexistente{i}", REMOTE_ADDR="203.0.113.9")
+        r = self._login("ClaveSegura#2026", REMOTE_ADDR="203.0.113.9")
+        self.assertEqual(r.status_code, 429)
+
+    def test_ip_real_viene_de_nginx_si_el_origen_es_local(self):
+        for i in range(20):
+            self._login("x", usuario=f"u{i}", REMOTE_ADDR="127.0.0.1", HTTP_X_FORWARDED_FOR="198.51.100.7")
+        # otra IP real: no queda bloqueada
+        r = self._login("ClaveSegura#2026", REMOTE_ADDR="127.0.0.1", HTTP_X_FORWARDED_FOR="198.51.100.8")
+        self.assertEqual(r.status_code, 302)
+
+    def test_next_externo_no_redirige_fuera_del_sitio(self):
+        r = self.client.post(reverse("login") + "?next=https://malo.example.com/x",
+                             {"username": "luis", "password": "ClaveSegura#2026"})
+        self.assertEqual(r.status_code, 302)
+        self.assertNotIn("malo.example.com", r["Location"])
+
+    def test_next_interno_se_respeta(self):
+        r = self.client.post(reverse("login") + "?next=/etl/algo/",
+                             {"username": "luis", "password": "ClaveSegura#2026"})
+        self.assertEqual(r["Location"], "/etl/algo/")
+
+    def test_sesion_expira_al_cerrar_el_navegador(self):
+        self._login("ClaveSegura#2026")
+        cookie = self.client.cookies["sessionid"]
+        self.assertEqual(cookie["max-age"], "")
+        self.assertEqual(cookie["expires"], "")
+
+    def test_cabeceras_de_seguridad(self):
+        r = self.client.get(reverse("login"))
+        self.assertIn("frame-ancestors 'self'", r["Content-Security-Policy"])
+        self.assertIn("object-src 'none'", r["Content-Security-Policy"])
+        self.assertEqual(r["Cache-Control"], "no-store")
+        self.assertEqual(r["X-Content-Type-Options"], "nosniff")
+
+    def test_contrasena_de_menos_de_10_caracteres_se_rechaza(self):
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError
+        with self.assertRaises(ValidationError):
+            validate_password("Corta#12", self.u)

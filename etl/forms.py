@@ -1,10 +1,26 @@
 from django import forms
+from django.conf import settings
 from .models import ConfiguracionEnvio, Proceso, InsumoDefinicion
 from .services import gobs_pg
 
 # Insumos que GOBS entrega directamente cuando el proceso tiene fuente PostgreSQL.
 # El CSV de CXC (cxc_csv) viene de otro sistema y siempre se sube a mano.
 CAMPOS_DESDE_GOBS = {"declaraciones", "actividades"}
+
+
+def _validador_archivo(extensiones):
+    """Solo las extensiones que el insumo declara y un tamaño razonable (la validación del
+    navegador con `accept` no protege: cualquiera puede saltársela)."""
+    permitidas = {e.strip().lower() for e in (extensiones or "").split(",") if e.strip()}
+    permitidas = {e if e.startswith(".") else f".{e}" for e in permitidas}
+
+    def validar(f):
+        nombre = (getattr(f, "name", "") or "").lower()
+        if permitidas and not any(nombre.endswith(e) for e in permitidas):
+            raise forms.ValidationError(f"Formato no permitido. Usa: {', '.join(sorted(permitidas))}.")
+        if getattr(f, "size", 0) > settings.UPLOAD_MAX_MB * 1024 * 1024:
+            raise forms.ValidationError(f"El archivo pesa más de {settings.UPLOAD_MAX_MB} MB.")
+    return validar
 
 
 class EjecutarProcesoForm(forms.Form):
@@ -19,6 +35,7 @@ class EjecutarProcesoForm(forms.Form):
                 help_text=f"Formatos: {insumo.extensiones}",
                 required=insumo.requerido,
                 widget=forms.ClearableFileInput(attrs={"class": "form-control", "accept": insumo.extensiones}),
+                validators=[_validador_archivo(insumo.extensiones)],
             )
         if self.usa_gobs:
             fecha = lambda: forms.DateInput(attrs={"class": "form-control", "type": "date"})
@@ -55,7 +72,14 @@ class ConfiguracionEnvioForm(forms.ModelForm):
         if f and hasattr(f, "size"):
             if f.size > 2 * 1024 * 1024:
                 raise forms.ValidationError("La imagen pesa más de 2 MB.")
-            tipo = getattr(f, "content_type", "")
-            if tipo and tipo not in ("image/png", "image/jpeg"):
-                raise forms.ValidationError("Usa una imagen PNG o JPG.")
+            # El tipo que declara el navegador se puede falsificar: se comprueba el contenido real
+            try:
+                from PIL import Image
+                f.seek(0)
+                formato = Image.open(f).format
+                f.seek(0)
+            except Exception:  # noqa: BLE001 - cualquier fallo = no es una imagen válida
+                formato = None
+            if formato not in ("PNG", "JPEG"):
+                raise forms.ValidationError("Usa una imagen PNG o JPG válida.")
         return f

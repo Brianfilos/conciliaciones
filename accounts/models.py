@@ -41,3 +41,10 @@ class CustomUser(AbstractUser):
 
     def nombre_completo(self):
         return self.get_full_name() or self.username
+
+
+class IntentoLogin(models.Model):
+    """Ingresos fallidos; sirven para bloquear temporalmente la fuerza bruta."""
+    usuario = models.CharField(max_length=150, db_index=True)
+    ip = models.GenericIPAddressField(null=True, blank=True, db_index=True)
+    fecha = models.DateTimeField(auto_now_add=True, db_index=True)
