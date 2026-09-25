@@ -34,7 +34,7 @@
   }
   .dashboard-table thead th:first-child { z-index: 3; }
 
-  .header-gobs { height: 24px; padding: 3px 7px; margin-right: 0; }
+  .header-gobs { height: 24px; margin-right: 0; }
 
   /* Botones y campos con tamaño táctil */
   .btn, .form-control, .form-select { min-height: 40px; }

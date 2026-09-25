@@ -563,7 +563,7 @@ code {
 
 
 /* === MARCA ======================================================= */
-.header-gobs { height: 30px; width: auto; background: #fff; border-radius: 8px; padding: 4px 10px; margin-right: .5rem; object-fit: contain; }
+.header-gobs { height: 32px; width: auto; margin-right: .75rem; object-fit: contain; }
 .app-footer { text-align: center; padding: 18px 12px 26px; font-size: .78rem; color: var(--text-muted); }
 .app-footer a { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); text-decoration: none; font-weight: 600; margin-left: 4px; }
 .app-footer a:hover { color: var(--text-primary); }

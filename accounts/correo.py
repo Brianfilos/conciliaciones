@@ -53,7 +53,7 @@ def limpiar_temporal(usuario):
 
 def enviar_temporal(usuario, plano, motivo="recuperacion"):
     """Envía el correo con la contraseña temporal. Devuelve True si el servidor de correo lo aceptó."""
-    logo = Path(settings.BASE_DIR) / "static" / "img" / "marca" / "logo-gobs.png"
+    logo = Path(settings.BASE_DIR) / "static" / "img" / "marca" / "logo-gobs-blanco.png"
     ctx = {
         "usuario": usuario, "temporal": plano, "horas": settings.PASSWORD_TEMPORAL_HORAS,
         "login_url": settings.SITE_URL.rstrip("/") + "/login/", "motivo": motivo,
@@ -69,7 +69,7 @@ def enviar_temporal(usuario, plano, motivo="recuperacion"):
         msg.mixed_subtype = "related"
         img = MIMEImage(logo.read_bytes(), _subtype="png")
         img.add_header("Content-ID", "<logo-gobs>")
-        img.add_header("Content-Disposition", "inline", filename="logo-gobs.png")
+        img.add_header("Content-Disposition", "inline", filename="logo-gobs-blanco.png")
         msg.attach(img)
     try:
         msg.send(fail_silently=False)
