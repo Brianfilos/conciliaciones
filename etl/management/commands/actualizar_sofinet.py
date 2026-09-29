@@ -131,6 +131,9 @@ class Command(BaseCommand):
                         f"{codigo} {proc_codigo}: {ejecucion.registros_nuevos} nuevos, "
                         f"{ejecucion.registros_duplicados} actualizados"))
                 else:
-                    detalle = ejecucion.error_log[:500]
+                    # La línea con la excepción real queda al final del traceback: se conserva
+                    # la cola, no el inicio (que solo repite la pila de llamadas).
+                    log = ejecucion.error_log or ""
+                    detalle = ("…\n" + log[-1500:]) if len(log) > 1500 else log
                     self.stderr.write(self.style.ERROR(f"{codigo} {proc_codigo}: ERROR — {detalle}"))
                     _avisar_falla(f"{codigo} {proc_codigo}", detalle)

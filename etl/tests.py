@@ -551,6 +551,37 @@ class ActualizarSofinetCommandTests(TestCase):
         self.assertIn("ESTRELLA", mail.outbox[0].subject)
 
     @override_settings(SOFINET_ESTRELLA_HOST="estrella.integralv6.com",
+                       SOFINET_ESTRELLA_USER="u", SOFINET_ESTRELLA_PASS="p",
+                       SOFINET_ALERTA_EMAIL="admin@example.com")
+    def test_fallo_del_motor_muestra_el_final_del_traceback_no_el_inicio(self):
+        """La línea con la excepción real queda al final de un traceback largo: truncar
+        desde el inicio (como hacía antes) la esconde siempre. Ver commit que lo corrigió."""
+        from unittest.mock import MagicMock, patch
+        from django.core.management import call_command
+
+        relleno = "en la pila de llamadas\n" * 100  # > 1500 caracteres
+        traceback_largo = relleno + "ValueError: ESTE ES EL ERROR REAL QUE IMPORTA"
+
+        def _motor_con_error(ejecucion):
+            m = MagicMock()
+
+            def _ejecutar(archivos, filtros):
+                ejecucion.estado = "ERROR"
+                ejecucion.error_log = traceback_largo
+                ejecucion.save()
+            m.ejecutar.side_effect = _ejecutar
+            return m
+
+        with patch("etl.management.commands.actualizar_sofinet.SofinetBot") as MockBot, \
+             patch("etl.management.commands.actualizar_sofinet.MotorETL", side_effect=_motor_con_error):
+            MockBot.return_value.descargar_cxc.return_value = b"CONSECUTIVO,ESTADO\n1,PAGADO\n" * 3
+            call_command("actualizar_sofinet", municipio="ESTRELLA")
+
+        self.assertEqual(len(mail.outbox), 3)  # uno por cada proceso que falló
+        cuerpo = mail.outbox[0].body
+        self.assertIn("ValueError: ESTE ES EL ERROR REAL QUE IMPORTA", cuerpo)
+
+    @override_settings(SOFINET_ESTRELLA_HOST="estrella.integralv6.com",
                        SOFINET_ESTRELLA_USER="u", SOFINET_ESTRELLA_PASS="p")
     def test_csv_invalido_no_ejecuta_nada(self):
         from unittest.mock import patch
