@@ -84,7 +84,8 @@ de carga de GOBS que usó.
 
 El CSV de Cuentas por Cobrar sigue viviendo en el portal SOFINET (login + exportar a mano).
 Este bot automatiza ese mismo camino con un navegador headless (Playwright) y actualiza
-CXC_AUTO/CXC_RETE con lo que descargue, más lo nuevo que haya en GOBS para el mismo rango.
+CXC_AUTO/CXC_RETE/DECLAREYPAGUE con lo que descargue, más lo nuevo que haya en GOBS para
+el mismo rango (los tres procesos usan el mismo archivo, así que basta una sola descarga).
 
 1. Completar en el `.env` `SOFINET_ESTRELLA_HOST/USER/PASS` y `SOFINET_COPACABANA_HOST/USER/PASS`
    (ver `.env.example`). Un municipio sin `_HOST` se omite, no rompe nada.

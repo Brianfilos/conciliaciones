@@ -1,6 +1,6 @@
 """
 Descarga el CSV de CXC desde el portal SOFINET de cada municipio configurado y actualiza
-CXC_AUTO / CXC_RETE con él (más lo que haya nuevo en GOBS para el mismo rango de fechas).
+CXC_AUTO / CXC_RETE / DECLAREYPAGUE con él (más lo que haya nuevo en GOBS para el mismo rango).
 
 Pensado para correr de madrugada por cron:
     0 5 * * * cd ~/conciliaciones && venv/bin/python manage.py actualizar_sofinet >> logs/sofinet.log 2>&1
@@ -23,7 +23,7 @@ from etl.services.motor import MotorETL
 from etl.services.sofinet_bot import SofinetBot, SofinetError, validar_csv
 from muni.models import Municipio
 
-PROCESOS_CON_CXC = ("CXC_AUTO", "CXC_RETE")
+PROCESOS_CON_CXC = ("CXC_AUTO", "CXC_RETE", "DECLAREYPAGUE")
 
 
 def _config_municipios():

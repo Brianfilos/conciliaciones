@@ -489,7 +489,8 @@ class ActualizarSofinetCommandTests(TestCase):
         self.estrella = Municipio.objects.create(codigo="ESTRELLA", nombre="La Estrella")
         self.p_auto = Proceso.objects.create(municipio=self.estrella, codigo="CXC_AUTO", nombre="Autorretención")
         self.p_rete = Proceso.objects.create(municipio=self.estrella, codigo="CXC_RETE", nombre="ReteICA")
-        for p in (self.p_auto, self.p_rete):
+        self.p_declare = Proceso.objects.create(municipio=self.estrella, codigo="DECLAREYPAGUE", nombre="Declare y Pague")
+        for p in (self.p_auto, self.p_rete, self.p_declare):
             InsumoDefinicion.objects.create(proceso=p, nombre="Archivo CXC", nombre_campo="cxc_csv",
                                             tipo="CARGUE", extensiones=".csv", orden=9)
 
@@ -514,7 +515,7 @@ class ActualizarSofinetCommandTests(TestCase):
     @override_settings(SOFINET_ESTRELLA_HOST="estrella.integralv6.com",
                        SOFINET_ESTRELLA_USER="u", SOFINET_ESTRELLA_PASS="p",
                        SOFINET_COPACABANA_HOST="")
-    def test_descarga_valida_ejecuta_los_dos_procesos_y_marca_automatico(self):
+    def test_descarga_valida_ejecuta_los_tres_procesos_y_marca_automatico(self):
         from unittest.mock import patch
         from django.core.management import call_command
         with patch("etl.management.commands.actualizar_sofinet.SofinetBot") as MockBot, \
@@ -522,10 +523,10 @@ class ActualizarSofinetCommandTests(TestCase):
             MockBot.return_value.descargar_cxc.return_value = b"CONSECUTIVO,ESTADO\n1,PAGADO\n" * 3
             call_command("actualizar_sofinet")
 
-        self.assertEqual(MockBot.call_count, 1)  # un solo login/descarga sirve para los 2 procesos
-        self.assertEqual(MockMotor.call_count, 2)
+        self.assertEqual(MockBot.call_count, 1)  # un solo login/descarga sirve para los 3 procesos
+        self.assertEqual(MockMotor.call_count, 3)
         ejecuciones = Ejecucion.objects.filter(proceso__municipio=self.estrella)
-        self.assertEqual(ejecuciones.count(), 2)
+        self.assertEqual(ejecuciones.count(), 3)
         for ej in ejecuciones:
             self.assertTrue(ej.automatico)
             self.assertEqual(ej.usuario.username, "bot_sofinet")
