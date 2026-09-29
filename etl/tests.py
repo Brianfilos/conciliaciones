@@ -644,3 +644,66 @@ class ExportadorSabanetaTests(TestCase):
         headers, filas = build_rows(p, {})
         self.assertEqual(filas[0][0], 1614)
         self.assertEqual(filas[0][1], 159)
+
+
+class FechaExtraFilterTests(TestCase):
+    def test_formatea_timestamp_a_dmy(self):
+        from etl.templatetags.etl_extras import fecha_extra
+        self.assertEqual(fecha_extra("2026-05-15 12:29:01.000"), "15/05/2026")
+
+    def test_formatea_solo_fecha(self):
+        from etl.templatetags.etl_extras import fecha_extra
+        self.assertEqual(fecha_extra("2026-05-15"), "15/05/2026")
+
+    def test_vacio_da_guion(self):
+        from etl.templatetags.etl_extras import fecha_extra
+        self.assertEqual(fecha_extra(""), "—")
+        self.assertEqual(fecha_extra(None), "—")
+
+    def test_texto_no_fecha_se_deja_igual(self):
+        from etl.templatetags.etl_extras import fecha_extra
+        self.assertEqual(fecha_extra("no es una fecha"), "no es una fecha")
+
+
+class SabanetaDashboardFechasTests(TestCase):
+    def setUp(self):
+        self.mun = Municipio.objects.create(codigo="SABANETA", nombre="Sabaneta Dashboard Test")
+        self.p = Proceso.objects.create(municipio=self.mun, codigo="PUBLICIDAD_EXTERIOR", nombre="Publicidad Exterior Visual")
+        self.u = User.objects.create_user("sabdash", "sabdash@example.com", "Sabaneta#2026",
+                                          municipio=self.mun, rol="ADMIN")
+        ej = Ejecucion.objects.create(proceso=self.p, usuario=self.u)
+        EncabezadoCXC.objects.create(
+            proceso=self.p, ejecucion=ej, consecutivo_cxc="100", consecutivo_original="100",
+            numero_documento="901", razon_social="Mayo SAS", estado_pago="PAGO REALIZADO",
+            total_a_pagar=1000,
+            datos_extra={"consecutivo1": "1140", "fecha_visita": "2026-05-15 12:29:01.000",
+                        "fecha_pago": "2026-05-15 16:28:08.000"})
+        EncabezadoCXC.objects.create(
+            proceso=self.p, ejecucion=ej, consecutivo_cxc="90", consecutivo_original="90",
+            numero_documento="800", razon_social="Enero SAS", estado_pago="PAGO REALIZADO",
+            total_a_pagar=1000,
+            datos_extra={"consecutivo1": "900", "fecha_visita": "2026-01-10 09:00:00.000",
+                        "fecha_pago": "2026-01-12 10:00:00.000"})
+        self.client.force_login(self.u)
+
+    def test_las_fechas_se_muestran_formateadas_no_como_timestamp(self):
+        html = self.client.get(reverse("dashboard", args=[self.p.id])).content.decode()
+        self.assertIn("15/05/2026", html)
+        self.assertNotIn("12:29:01", html)
+
+    def test_filtro_fecha_visita_reduce_a_lo_que_esta_en_el_rango(self):
+        r = self.client.get(reverse("dashboard", args=[self.p.id]),
+                            {"sab_fvisita_desde": "2026-05-01", "sab_fvisita_hasta": "2026-05-31"})
+        self.assertContains(r, "Mayo SAS")
+        self.assertNotContains(r, "Enero SAS")
+
+    def test_filtro_fecha_pago_reduce_a_lo_que_esta_en_el_rango(self):
+        r = self.client.get(reverse("dashboard", args=[self.p.id]),
+                            {"sab_fpago_desde": "2026-01-01", "sab_fpago_hasta": "2026-01-31"})
+        self.assertContains(r, "Enero SAS")
+        self.assertNotContains(r, "Mayo SAS")
+
+    def test_sin_columna_detalle_ni_estado_cxc_ni_fecha_venc(self):
+        html = self.client.get(reverse("dashboard", args=[self.p.id])).content.decode()
+        self.assertNotIn("Fecha Venc.", html)
+        self.assertNotIn(">Detalle<", html)

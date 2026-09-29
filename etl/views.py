@@ -190,6 +190,11 @@ class DashboardView(View):
         env_fecha_pago_hasta = _parse_fecha(request.GET.get("env_fecha_pago_hasta", ""))
         env_fecha_pres_desde = _parse_fecha(request.GET.get("env_fecha_pres_desde", ""))
         env_fecha_pres_hasta = _parse_fecha(request.GET.get("env_fecha_pres_hasta", ""))
+        # Sabaneta: rango desde/hasta para fecha de la visita y fecha de pago (texto en datos_extra)
+        sab_fvisita_desde = _parse_fecha(request.GET.get("sab_fvisita_desde", ""))
+        sab_fvisita_hasta = _parse_fecha(request.GET.get("sab_fvisita_hasta", ""))
+        sab_fpago_desde   = _parse_fecha(request.GET.get("sab_fpago_desde", ""))
+        sab_fpago_hasta   = _parse_fecha(request.GET.get("sab_fpago_hasta", ""))
         q_valor_unit  = request.GET.get("q_valor_unit", "").strip()
         q_valor_tot   = request.GET.get("q_valor_tot", "").strip()
         q_total_pagar = request.GET.get("q_total_pagar", "").strip()
@@ -338,6 +343,29 @@ class DashboardView(View):
                             continue
                         vals_en_rango.append(v)
                     qs = qs.filter(**{f"datos_extra__{campo}__in": vals_en_rango})
+            # Sabaneta: rango en fecha de la visita y fecha de pago (texto "YYYY-MM-DD ..." en datos_extra)
+            if es_sabaneta:
+                for campo, desde, hasta in [
+                    ("fecha_visita", sab_fvisita_desde, sab_fvisita_hasta),
+                    ("fecha_pago", sab_fpago_desde, sab_fpago_hasta),
+                ]:
+                    if desde or hasta:
+                        from datetime import datetime
+                        vals_en_rango = []
+                        for v in EncabezadoCXC.objects.filter(proceso=proceso)\
+                                .values_list(f"datos_extra__{campo}", flat=True).distinct():
+                            if not v:
+                                continue
+                            try:
+                                d = datetime.strptime(str(v)[:10], "%Y-%m-%d").date()
+                            except ValueError:
+                                continue
+                            if desde and d < desde:
+                                continue
+                            if hasta and d > hasta:
+                                continue
+                            vals_en_rango.append(v)
+                        qs = qs.filter(**{f"datos_extra__{campo}__in": vals_en_rango})
             if q_total_pagar:
                 from django.db.models.functions import Cast as _Cast
                 from django.db.models import CharField as _CF
@@ -379,7 +407,9 @@ class DashboardView(View):
                                             caldas_tipo_persona_filtro, caldas_periodo_filtro,
                                             caldas_ano_filtro, caldas_clasi_filtro,
                                             env_fecha_pago_desde, env_fecha_pago_hasta,
-                                            env_fecha_pres_desde, env_fecha_pres_hasta] if x])
+                                            env_fecha_pres_desde, env_fecha_pres_hasta,
+                                            sab_fvisita_desde, sab_fvisita_hasta,
+                                            sab_fpago_desde, sab_fpago_hasta] if x])
         total_filtrado = qs.count()
         paginator = Paginator(qs, per_page)
         try:
@@ -482,6 +512,10 @@ class DashboardView(View):
                     ("env_fecha_pago_hasta", env_fecha_pago_hasta.isoformat() if env_fecha_pago_hasta else ""),
                     ("env_fecha_pres_desde", env_fecha_pres_desde.isoformat() if env_fecha_pres_desde else ""),
                     ("env_fecha_pres_hasta", env_fecha_pres_hasta.isoformat() if env_fecha_pres_hasta else ""),
+                    ("sab_fvisita_desde", sab_fvisita_desde.isoformat() if sab_fvisita_desde else ""),
+                    ("sab_fvisita_hasta", sab_fvisita_hasta.isoformat() if sab_fvisita_hasta else ""),
+                    ("sab_fpago_desde", sab_fpago_desde.isoformat() if sab_fpago_desde else ""),
+                    ("sab_fpago_hasta", sab_fpago_hasta.isoformat() if sab_fpago_hasta else ""),
                 ] if v
             ]),
             "pagination_qs": urlencode([
@@ -499,6 +533,10 @@ class DashboardView(View):
                     ("env_fecha_pago_hasta", env_fecha_pago_hasta.isoformat() if env_fecha_pago_hasta else ""),
                     ("env_fecha_pres_desde", env_fecha_pres_desde.isoformat() if env_fecha_pres_desde else ""),
                     ("env_fecha_pres_hasta", env_fecha_pres_hasta.isoformat() if env_fecha_pres_hasta else ""),
+                    ("sab_fvisita_desde", sab_fvisita_desde.isoformat() if sab_fvisita_desde else ""),
+                    ("sab_fvisita_hasta", sab_fvisita_hasta.isoformat() if sab_fvisita_hasta else ""),
+                    ("sab_fpago_desde", sab_fpago_desde.isoformat() if sab_fpago_desde else ""),
+                    ("sab_fpago_hasta", sab_fpago_hasta.isoformat() if sab_fpago_hasta else ""),
                 ] if v
             ]),
             "tipo_doc_filtro": tipo_doc_filtro,
@@ -525,6 +563,10 @@ class DashboardView(View):
             "env_fecha_pago_hasta": env_fecha_pago_hasta.isoformat() if env_fecha_pago_hasta else "",
             "env_fecha_pres_desde": env_fecha_pres_desde.isoformat() if env_fecha_pres_desde else "",
             "env_fecha_pres_hasta": env_fecha_pres_hasta.isoformat() if env_fecha_pres_hasta else "",
+            "sab_fvisita_desde": sab_fvisita_desde.isoformat() if sab_fvisita_desde else "",
+            "sab_fvisita_hasta": sab_fvisita_hasta.isoformat() if sab_fvisita_hasta else "",
+            "sab_fpago_desde": sab_fpago_desde.isoformat() if sab_fpago_desde else "",
+            "sab_fpago_hasta": sab_fpago_hasta.isoformat() if sab_fpago_hasta else "",
         })
 
 

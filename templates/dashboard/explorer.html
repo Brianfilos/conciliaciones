@@ -123,6 +123,10 @@
       <input type="hidden" name="env_fecha_pago_hasta" id="hf-env_fecha_pago_hasta" value="{{ env_fecha_pago_hasta }}">
       <input type="hidden" name="env_fecha_pres_desde" id="hf-env_fecha_pres_desde" value="{{ env_fecha_pres_desde }}">
       <input type="hidden" name="env_fecha_pres_hasta" id="hf-env_fecha_pres_hasta" value="{{ env_fecha_pres_hasta }}">
+      <input type="hidden" name="sab_fvisita_desde" id="hf-sab_fvisita_desde" value="{{ sab_fvisita_desde }}">
+      <input type="hidden" name="sab_fvisita_hasta" id="hf-sab_fvisita_hasta" value="{{ sab_fvisita_hasta }}">
+      <input type="hidden" name="sab_fpago_desde"   id="hf-sab_fpago_desde"   value="{{ sab_fpago_desde }}">
+      <input type="hidden" name="sab_fpago_hasta"   id="hf-sab_fpago_hasta"   value="{{ sab_fpago_hasta }}">
       <input type="hidden" name="q_valor_unit"      id="hf-q_valor_unit"       value="{{ q_valor_unit }}">
       <input type="hidden" name="q_valor_tot"       id="hf-q_valor_tot"        value="{{ q_valor_tot }}">
       <input type="hidden" name="q_total_pagar"     id="hf-q_total_pagar"      value="{{ q_total_pagar }}">
@@ -356,12 +360,42 @@
           </div></th>
           {% elif es_sabaneta %}
           <th>Nombre del establecimiento</th>
-          <th>Fecha de la visita</th>
+          <th><div class="d-flex align-items-center gap-1">Fecha de la visita
+            <div class="dropdown"><button class="cf-btn{% if sab_fvisita_desde or sab_fvisita_hasta %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
+              <div class="dropdown-menu cf-panel shadow p-2" style="min-width:230px;">
+                <div class="mb-1"><small class="text-muted">Desde</small>
+                  <input type="date" class="form-control form-control-sm" value="{{ sab_fvisita_desde }}" oninput="document.getElementById('hf-sab_fvisita_desde').value=this.value">
+                </div>
+                <div class="mb-2"><small class="text-muted">Hasta</small>
+                  <input type="date" class="form-control form-control-sm" value="{{ sab_fvisita_hasta }}" oninput="document.getElementById('hf-sab_fvisita_hasta').value=this.value">
+                </div>
+                <div class="d-flex gap-1">
+                  <button type="submit" class="btn btn-sm btn-primary flex-grow-1">Aplicar</button>
+                  {% if sab_fvisita_desde or sab_fvisita_hasta %}<button type="button" class="btn btn-sm btn-outline-secondary" onclick="cfClear('sab_fvisita_desde');cfClear('sab_fvisita_hasta')">✕</button>{% endif %}
+                </div>
+              </div>
+            </div>
+          </div></th>
           <th>Año</th>
           <th>Bimestre</th>
           <th>Tipo de declaración</th>
           <th>Radicado</th>
-          <th>Fecha Pago</th>
+          <th><div class="d-flex align-items-center gap-1">Fecha Pago
+            <div class="dropdown"><button class="cf-btn{% if sab_fpago_desde or sab_fpago_hasta %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
+              <div class="dropdown-menu cf-panel shadow p-2" style="min-width:230px;">
+                <div class="mb-1"><small class="text-muted">Desde</small>
+                  <input type="date" class="form-control form-control-sm" value="{{ sab_fpago_desde }}" oninput="document.getElementById('hf-sab_fpago_desde').value=this.value">
+                </div>
+                <div class="mb-2"><small class="text-muted">Hasta</small>
+                  <input type="date" class="form-control form-control-sm" value="{{ sab_fpago_hasta }}" oninput="document.getElementById('hf-sab_fpago_hasta').value=this.value">
+                </div>
+                <div class="d-flex gap-1">
+                  <button type="submit" class="btn btn-sm btn-primary flex-grow-1">Aplicar</button>
+                  {% if sab_fpago_desde or sab_fpago_hasta %}<button type="button" class="btn btn-sm btn-outline-secondary" onclick="cfClear('sab_fpago_desde');cfClear('sab_fpago_hasta')">✕</button>{% endif %}
+                </div>
+              </div>
+            </div>
+          </div></th>
           {% else %}
           <th><div class="d-flex align-items-center gap-1">Fecha Cobro
             <div class="dropdown"><button class="cf-btn{% if fecha_desde or fecha_hasta %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
@@ -658,12 +692,12 @@
           <td class="small">{{ obj.datos_extra.fecha_pago|default:"—" }}</td>
           {% elif es_sabaneta %}
           <td class="small">{{ obj.datos_extra.nombre_establecimiento|default:"—" }}</td>
-          <td class="small">{{ obj.datos_extra.fecha_visita|default:"—" }}</td>
+          <td class="small">{{ obj.datos_extra.fecha_visita|fecha_extra }}</td>
           <td class="small">{{ obj.datos_extra.ano|default:"—" }}</td>
           <td class="small">{{ obj.datos_extra.bimestre|default:"—" }}</td>
           <td class="small">{{ obj.datos_extra.tipo_declaracion|default:"—" }}</td>
           <td class="small">{{ obj.datos_extra.radicado|default:"—" }}</td>
-          <td class="small">{{ obj.datos_extra.fecha_pago|default:"—" }}</td>
+          <td class="small">{{ obj.datos_extra.fecha_pago|fecha_extra }}</td>
           {% else %}
           <td class="small cp-cell" title="Clic para copiar">{{ obj.fecha_cobro|date:"d/m/Y"|default:"—" }}</td>
           <td class="small cp-cell" title="Clic para copiar">{{ obj.fecha_vencimiento|date:"d/m/Y"|default:"—" }}</td>
