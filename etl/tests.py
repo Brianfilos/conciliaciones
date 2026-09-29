@@ -463,3 +463,98 @@ class SubidasSeguridadTests(TestCase):
             {"firma_imagen": SimpleUploadedFile("firma.png", b"<svg onload=alert(1)>", content_type="image/png")})
         self.assertFalse(f.is_valid())
         self.assertIn("firma_imagen", f.errors)
+
+
+class SofinetValidarCsvTests(TestCase):
+    def test_rechaza_vacio(self):
+        from etl.services.sofinet_bot import validar_csv
+        self.assertIsNotNone(validar_csv(b""))
+
+    def test_rechaza_sin_columna_consecutivo(self):
+        from etl.services.sofinet_bot import validar_csv
+        self.assertIsNotNone(validar_csv(b"A,B\n1,2\n" * 5))
+
+    def test_rechaza_pagina_html_de_login(self):
+        from etl.services.sofinet_bot import validar_csv
+        self.assertIsNotNone(validar_csv(b"<html><body>Login</body></html>" * 3))
+
+    def test_acepta_csv_con_consecutivo(self):
+        from etl.services.sofinet_bot import validar_csv
+        self.assertIsNone(validar_csv(b"CONSECUTIVO,ESTADO\n123,PAGADO\n" * 3))
+
+
+class ActualizarSofinetCommandTests(TestCase):
+    def setUp(self):
+        from etl.models import InsumoDefinicion
+        self.estrella = Municipio.objects.create(codigo="ESTRELLA", nombre="La Estrella")
+        self.p_auto = Proceso.objects.create(municipio=self.estrella, codigo="CXC_AUTO", nombre="Autorretención")
+        self.p_rete = Proceso.objects.create(municipio=self.estrella, codigo="CXC_RETE", nombre="ReteICA")
+        for p in (self.p_auto, self.p_rete):
+            InsumoDefinicion.objects.create(proceso=p, nombre="Archivo CXC", nombre_campo="cxc_csv",
+                                            tipo="CARGUE", extensiones=".csv", orden=9)
+
+    def _motor_falso(self, ejecucion):
+        from unittest.mock import MagicMock
+        m = MagicMock()
+
+        def _ejecutar(archivos, filtros):
+            ejecucion.estado = "COMPLETADO"
+            ejecucion.registros_nuevos = 3
+            ejecucion.registros_duplicados = 1
+            ejecucion.save()
+        m.ejecutar.side_effect = _ejecutar
+        return m
+
+    @override_settings(SOFINET_ESTRELLA_HOST="", SOFINET_COPACABANA_HOST="")
+    def test_sin_configuracion_no_hace_nada(self):
+        from django.core.management import call_command
+        call_command("actualizar_sofinet")
+        self.assertEqual(Ejecucion.objects.count(), 0)
+
+    @override_settings(SOFINET_ESTRELLA_HOST="estrella.integralv6.com",
+                       SOFINET_ESTRELLA_USER="u", SOFINET_ESTRELLA_PASS="p",
+                       SOFINET_COPACABANA_HOST="")
+    def test_descarga_valida_ejecuta_los_dos_procesos_y_marca_automatico(self):
+        from unittest.mock import patch
+        from django.core.management import call_command
+        with patch("etl.management.commands.actualizar_sofinet.SofinetBot") as MockBot, \
+             patch("etl.management.commands.actualizar_sofinet.MotorETL", side_effect=self._motor_falso) as MockMotor:
+            MockBot.return_value.descargar_cxc.return_value = b"CONSECUTIVO,ESTADO\n1,PAGADO\n" * 3
+            call_command("actualizar_sofinet")
+
+        self.assertEqual(MockBot.call_count, 1)  # un solo login/descarga sirve para los 2 procesos
+        self.assertEqual(MockMotor.call_count, 2)
+        ejecuciones = Ejecucion.objects.filter(proceso__municipio=self.estrella)
+        self.assertEqual(ejecuciones.count(), 2)
+        for ej in ejecuciones:
+            self.assertTrue(ej.automatico)
+            self.assertEqual(ej.usuario.username, "bot_sofinet")
+            self.assertEqual(ej.estado, "COMPLETADO")
+        bot_user = User.objects.get(username="bot_sofinet")
+        self.assertFalse(bot_user.is_active)
+        self.assertFalse(bot_user.has_usable_password())
+
+    @override_settings(SOFINET_ESTRELLA_HOST="estrella.integralv6.com",
+                       SOFINET_ESTRELLA_USER="u", SOFINET_ESTRELLA_PASS="p",
+                       SOFINET_ALERTA_EMAIL="admin@example.com")
+    def test_fallo_en_la_descarga_no_toca_datos_y_avisa(self):
+        from unittest.mock import patch
+        from django.core.management import call_command
+        from etl.services.sofinet_bot import SofinetError
+        with patch("etl.management.commands.actualizar_sofinet.SofinetBot") as MockBot:
+            MockBot.return_value.descargar_cxc.side_effect = SofinetError("portal caído")
+            call_command("actualizar_sofinet", municipio="ESTRELLA")
+
+        self.assertEqual(Ejecucion.objects.count(), 0)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("ESTRELLA", mail.outbox[0].subject)
+
+    @override_settings(SOFINET_ESTRELLA_HOST="estrella.integralv6.com",
+                       SOFINET_ESTRELLA_USER="u", SOFINET_ESTRELLA_PASS="p")
+    def test_csv_invalido_no_ejecuta_nada(self):
+        from unittest.mock import patch
+        from django.core.management import call_command
+        with patch("etl.management.commands.actualizar_sofinet.SofinetBot") as MockBot:
+            MockBot.return_value.descargar_cxc.return_value = b"<html>login otra vez</html>"
+            call_command("actualizar_sofinet", municipio="ESTRELLA")
+        self.assertEqual(Ejecucion.objects.count(), 0)

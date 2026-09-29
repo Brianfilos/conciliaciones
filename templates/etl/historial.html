@@ -200,6 +200,7 @@
             <span class="cell-user">
               <span class="cell-user-avatar">{{ ej.usuario.username|first|upper }}</span>
               {{ ej.usuario.username }}
+              {% if ej.automatico %}<span class="status-badge" style="background:#eef2f7;color:#475569;">Automático</span>{% endif %}
             </span>
           </td>
           <td>

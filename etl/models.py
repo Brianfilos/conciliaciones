@@ -51,6 +51,8 @@ class Ejecucion(models.Model):
     registros_nuevos = models.IntegerField(default=0)
     registros_duplicados = models.IntegerField(default=0)
     error_log = models.TextField(blank=True)
+    # True cuando la disparó el bot nocturno de SOFINET, no una persona desde "Ejecutar proceso"
+    automatico = models.BooleanField(default=False)
 
     class Meta:
         ordering = ["-fecha_inicio"]

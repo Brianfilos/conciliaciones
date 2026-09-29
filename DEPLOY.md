@@ -80,6 +80,39 @@ Con `GOBS_PG_ENABLED=False` la app funciona como antes, pidiendo los Excel.
 Los datos de GOBS se actualizan cada 24 horas; cada ejecución guarda en su log la fecha
 de carga de GOBS que usó.
 
+## 5c. Bot SOFINET (descarga nocturna del CSV de CXC — La Estrella y Copacabana)
+
+El CSV de Cuentas por Cobrar sigue viviendo en el portal SOFINET (login + exportar a mano).
+Este bot automatiza ese mismo camino con un navegador headless (Playwright) y actualiza
+CXC_AUTO/CXC_RETE con lo que descargue, más lo nuevo que haya en GOBS para el mismo rango.
+
+1. Completar en el `.env` `SOFINET_ESTRELLA_HOST/USER/PASS` y `SOFINET_COPACABANA_HOST/USER/PASS`
+   (ver `.env.example`). Un municipio sin `_HOST` se omite, no rompe nada.
+2. Opcional pero recomendado: `SOFINET_ALERTA_EMAIL` — a dónde avisar si la descarga o la carga
+   fallan (no toca datos cuando falla, pero sin este correo el aviso solo queda en el log).
+3. Instalar el navegador y sus dependencias del sistema (una sola vez; Chromium pesa ~150-200 MB,
+   puede tardar según la conexión del VPS):
+   ```bash
+   source venv/bin/activate
+   pip install -r requirements.txt        # agrega playwright
+   playwright install --with-deps chromium
+   ```
+4. Probar a mano antes de programarlo:
+   ```bash
+   python manage.py actualizar_sofinet --municipio ESTRELLA
+   ```
+5. Programarlo de madrugada (después de que GOBS termine su carga diaria):
+   ```bash
+   mkdir -p logs
+   crontab -e
+   # agregar:
+   0 5 * * * cd /home/ubuntu/app-conciliaciones && venv/bin/python manage.py actualizar_sofinet >> logs/sofinet.log 2>&1
+   ```
+
+Si SOFINET cambia esa pantalla del reporte, el bot empieza a fallar (se nota en `logs/sofinet.log`
+o en el correo de alerta); mientras se ajusta, la carga manual desde "Ejecutar proceso" sigue
+funcionando igual que siempre.
+
 ## 6. Inicializar la base de datos
 
 ```bash

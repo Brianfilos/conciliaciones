@@ -187,3 +187,14 @@ ADMIN_URL = config('ADMIN_URL', default='django-admin/')
 LOGIN_VENTANA_MIN = config('LOGIN_VENTANA_MIN', default=15, cast=int)
 LOGIN_MAX_INTENTOS_USUARIO = config('LOGIN_MAX_INTENTOS_USUARIO', default=6, cast=int)
 LOGIN_MAX_INTENTOS_IP = config('LOGIN_MAX_INTENTOS_IP', default=20, cast=int)
+
+# ── Bot SOFINET (descarga nocturna del CSV de CXC) ───────────────────────────
+# Sin SOFINET_<CODIGO>_HOST ese municipio se omite; ver `python manage.py actualizar_sofinet`.
+SOFINET_ESTRELLA_HOST = config('SOFINET_ESTRELLA_HOST', default='')
+SOFINET_ESTRELLA_USER = config('SOFINET_ESTRELLA_USER', default='')
+SOFINET_ESTRELLA_PASS = config('SOFINET_ESTRELLA_PASS', default='')
+SOFINET_COPACABANA_HOST = config('SOFINET_COPACABANA_HOST', default='')
+SOFINET_COPACABANA_USER = config('SOFINET_COPACABANA_USER', default='')
+SOFINET_COPACABANA_PASS = config('SOFINET_COPACABANA_PASS', default='')
+# A dónde avisar si la descarga o la carga automática fallan (vacío = solo queda en el log)
+SOFINET_ALERTA_EMAIL = config('SOFINET_ALERTA_EMAIL', default='')
