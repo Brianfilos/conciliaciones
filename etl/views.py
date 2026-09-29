@@ -165,6 +165,7 @@ class DashboardView(View):
         es_caldas     = proceso.municipio.codigo == "CALDAS"
         es_envigado   = proceso.municipio.codigo == "ENVIGADO"
         es_caldas_ica = es_caldas and proceso.codigo == "DECLAREYPAGUE"
+        es_sabaneta   = proceso.municipio.codigo == "SABANETA"
 
         tab = request.GET.get("tab", "encabezado")
         q = request.GET.get("q", "").strip()
@@ -455,6 +456,7 @@ class DashboardView(View):
             "es_envigado": es_envigado,
             "es_caldas": es_caldas,
             "es_caldas_ica": es_caldas_ica,
+            "es_sabaneta": es_sabaneta,
             "caldas_ret_auto": caldas_ret_auto,
             "tab_enc_label": "Declaraciones" if es_caldas else "Encabezado",
             "tab_det_label": "Pagos" if es_caldas else "Detalle",

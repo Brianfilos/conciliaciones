@@ -590,3 +590,57 @@ class ActualizarSofinetCommandTests(TestCase):
             MockBot.return_value.descargar_cxc.return_value = b"<html>login otra vez</html>"
             call_command("actualizar_sofinet", municipio="ESTRELLA")
         self.assertEqual(Ejecucion.objects.count(), 0)
+
+
+class ProcesadorSabanetaTests(TestCase):
+    def test_captura_los_dos_consecutivos(self):
+        import pandas as pd
+        from etl.services.sabaneta import ProcesadorSabaneta
+        mun = Municipio.objects.create(codigo="SAB2", nombre="Sabaneta Test")
+        dec = pd.DataFrame([{
+            "Consecutivo 1": 1614, "Consecutivo 2": 159, "Nombre productor": "Grupo plenitud",
+            "Nombre del establecimiento": "Grupo plenitud", "Tipo de documento": "NI",
+            "Cedula/NIT propietario": "890919160", "Fecha de la visita": "2026-09-11",
+            "1. Año": 2026, "2. Bimestre": "4 Julio/Agosto 2026", "3. Tipo de declaracion": "Normal",
+            "No. Radicado": 157, "20. TOTAL A PAGAR": 382330, "Estado Pago": "Pago realizado",
+            "Fecha Pago": "2026-09-25",
+        }])
+        proc = ProcesadorSabaneta("PUBLICIDAD_EXTERIOR", {"declaraciones": dec}, mun)
+        df_enc, _ = proc.procesar()
+        self.assertEqual(len(df_enc), 1)
+        fila = df_enc.iloc[0]
+        self.assertEqual(fila["consecutivo_cxc"], "159")  # sigue siendo la identidad CXC
+        self.assertEqual(fila["datos_extra"]["consecutivo1"], "1614")
+
+    def test_sin_columna_consecutivo1_no_rompe(self):
+        """Si GOBS no trae esa columna, se sigue procesando (queda vacío, no explota)."""
+        import pandas as pd
+        from etl.services.sabaneta import ProcesadorSabaneta
+        mun = Municipio.objects.create(codigo="SAB2B", nombre="Sabaneta Sin Consec1")
+        dec = pd.DataFrame([{
+            "Consecutivo 2": 159, "Nombre productor": "Grupo plenitud", "Estado Pago": "Pendiente",
+            "20. TOTAL A PAGAR": 100,
+        }])
+        proc = ProcesadorSabaneta("PUBLICIDAD_EXTERIOR", {"declaraciones": dec}, mun)
+        df_enc, _ = proc.procesar()
+        self.assertEqual(df_enc.iloc[0]["datos_extra"]["consecutivo1"], "")
+
+
+class ExportadorSabanetaTests(TestCase):
+    def test_incluye_los_dos_consecutivos(self):
+        from etl.services.exportador_sabaneta import HEADERS, build_rows
+        mun = Municipio.objects.create(codigo="SAB3", nombre="Sabaneta Export Test")
+        p = Proceso.objects.create(municipio=mun, codigo="PUBLICIDAD_EXTERIOR", nombre="Publicidad Exterior Visual")
+        u = User.objects.create_user("sabexp", "sabexp@example.com", "Sabaneta#2026", municipio=mun, rol="ADMIN")
+        ej = Ejecucion.objects.create(proceso=p, usuario=u)
+        EncabezadoCXC.objects.create(
+            proceso=p, ejecucion=ej, consecutivo_cxc="159", consecutivo_original="159",
+            numero_documento="890919160", razon_social="Grupo plenitud",
+            estado_pago="PAGO REALIZADO", total_a_pagar=382330,
+            datos_extra={"consecutivo1": "1614", "nombre_establecimiento": "Grupo plenitud"})
+
+        self.assertEqual(HEADERS[0], "Consecutivo 1")
+        self.assertEqual(HEADERS[1], "Consecutivo 2")
+        headers, filas = build_rows(p, {})
+        self.assertEqual(filas[0][0], 1614)
+        self.assertEqual(filas[0][1], 159)

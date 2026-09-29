@@ -67,6 +67,7 @@ class ProcesadorSabaneta(ProcesadorBase):
         dec = self._leer("declaraciones")
         c = self._c
         col = {
+            "consec1":  c(dec, "Consecutivo 1"),
             "consec":   c(dec, "Consecutivo 2"),
             "prod":     c(dec, "Nombre productor"),
             "estab":    c(dec, "Nombre del establecimiento"),
@@ -109,6 +110,7 @@ class ProcesadorSabaneta(ProcesadorBase):
                 "estado_pago": estado,
                 "estado_cxc": "",
                 "datos_extra": {
+                    "consecutivo1": _entero_texto(g(f, "consec1")),
                     "nombre_establecimiento": _limpio(g(f, "estab")),
                     "fecha_visita": _texto_fecha(g(f, "fvisita")),
                     "ano": _entero_texto(g(f, "ano")),

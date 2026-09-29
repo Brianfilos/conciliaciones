@@ -258,9 +258,13 @@
           {# ══════════ OTROS MUNICIPIOS — ENCABEZADO ══════════ #}
           {% else %}
 
+          {% if es_sabaneta %}
+          {# Sabaneta: publicidad exterior trae dos consecutivos distintos de GOBS #}
+          <th>Consecutivo 1</th>
+          {% endif %}
           {# Consecutivo #}
           <th>
-            <div class="d-flex align-items-center gap-1">Consecutivo
+            <div class="d-flex align-items-center gap-1">{% if es_sabaneta %}Consecutivo 2{% else %}Consecutivo{% endif %}
               <div class="dropdown">
                 <button class="cf-btn{% if q_consec %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
                 <div class="dropdown-menu cf-panel shadow">
@@ -633,6 +637,7 @@
         {# ══════════ OTROS MUNICIPIOS — FILA ENCABEZADO ══════════ #}
         {% else %}
         <tr>
+          {% if es_sabaneta %}<td class="font-monospace small">{{ obj.datos_extra.consecutivo1|default:"—" }}</td>{% endif %}
           <td class="font-monospace small">{{ obj.consecutivo_cxc }}</td>
           <td class="small">{{ obj.numero_documento }}</td>
           <td class="small">{{ obj.nombre_completo }}</td>
