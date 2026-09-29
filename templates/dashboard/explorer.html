@@ -54,9 +54,11 @@
       <button type="button" class="btn btn-sm tab-btn {% if tab == 'encabezado' %}active{% endif %}" data-tab="encabezado">
         <i class="bi bi-person-lines-fill me-1"></i>{{ tab_enc_label }}
       </button>
+      {% if not es_sabaneta %}
       <button type="button" class="btn btn-sm tab-btn {% if tab == 'detalle' %}active{% endif %}" data-tab="detalle">
         <i class="bi bi-list-ul me-1"></i>{{ tab_det_label }}
       </button>
+      {% endif %}
     </div>
 
     <!-- Search -->
@@ -352,6 +354,14 @@
               </div>
             </div>
           </div></th>
+          {% elif es_sabaneta %}
+          <th>Nombre del establecimiento</th>
+          <th>Fecha de la visita</th>
+          <th>Año</th>
+          <th>Bimestre</th>
+          <th>Tipo de declaración</th>
+          <th>Radicado</th>
+          <th>Fecha Pago</th>
           {% else %}
           <th><div class="d-flex align-items-center gap-1">Fecha Cobro
             <div class="dropdown"><button class="cf-btn{% if fecha_desde or fecha_hasta %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
@@ -412,7 +422,7 @@
               </div>
             </div>
           </th>
-          {% if not es_envigado %}
+          {% if not es_envigado and not es_sabaneta %}
           <th>
             <div class="d-flex align-items-center gap-1">Estado CXC
               <div class="dropdown">
@@ -646,6 +656,14 @@
           <td class="small">{{ obj.datos_extra.ano|default:"—" }}</td>
           <td class="small">{{ obj.datos_extra.fecha_pres|default:"—" }}</td>
           <td class="small">{{ obj.datos_extra.fecha_pago|default:"—" }}</td>
+          {% elif es_sabaneta %}
+          <td class="small">{{ obj.datos_extra.nombre_establecimiento|default:"—" }}</td>
+          <td class="small">{{ obj.datos_extra.fecha_visita|default:"—" }}</td>
+          <td class="small">{{ obj.datos_extra.ano|default:"—" }}</td>
+          <td class="small">{{ obj.datos_extra.bimestre|default:"—" }}</td>
+          <td class="small">{{ obj.datos_extra.tipo_declaracion|default:"—" }}</td>
+          <td class="small">{{ obj.datos_extra.radicado|default:"—" }}</td>
+          <td class="small">{{ obj.datos_extra.fecha_pago|default:"—" }}</td>
           {% else %}
           <td class="small cp-cell" title="Clic para copiar">{{ obj.fecha_cobro|date:"d/m/Y"|default:"—" }}</td>
           <td class="small cp-cell" title="Clic para copiar">{{ obj.fecha_vencimiento|date:"d/m/Y"|default:"—" }}</td>
@@ -653,7 +671,7 @@
           {% endif %}
           <td class="text-end small cop-money">{{ obj.total_a_pagar|default:"" }}</td>
           <td><span class="badge {% if 'PAGO REALIZADO' in obj.estado_pago|upper %}bg-success{% elif obj.estado_pago %}bg-warning text-dark{% else %}bg-secondary{% endif %} small">{% if obj.estado_pago %}{{ obj.estado_pago }}{% else %}—{% endif %}</span></td>
-          {% if not es_envigado %}<td><span class="badge bg-light text-dark border small">{{ obj.estado_cxc|default:"—" }}</span></td>{% endif %}
+          {% if not es_envigado and not es_sabaneta %}<td><span class="badge bg-light text-dark border small">{{ obj.estado_cxc|default:"—" }}</span></td>{% endif %}
         </tr>
         {% endif %}{# fin es_caldas encabezado #}
 
