@@ -28,20 +28,52 @@
             Las declaraciones y actividades se leen directamente de <strong>GOBS</strong>
             (se actualizan cada 24 horas).
             {% if form.permite_manual_con_gobs %}
-            Si necesitas datos del mismo día, puedes subir el archivo manual más abajo: reemplaza
+            Si necesitas datos del mismo día, elige «Cargar archivo manual» abajo: reemplaza
             lo que traiga GOBS solo en esta ejecución.
             {% else %}
             Solo debes subir el archivo de CXC.
             {% endif %}
           </div>
           {% endif %}
+
+          {% if form.permite_manual_con_gobs %}
+          <div class="mb-3">
+            <div class="btn-group w-100" role="group" aria-label="Origen de declaraciones y actividades">
+              <input type="radio" class="btn-check" name="modo_carga" id="modo-gobs" checked onchange="cambiarModoCarga('gobs')">
+              <label class="btn btn-outline-primary btn-sm" for="modo-gobs">
+                <i class="bi bi-database-check me-1"></i>Traer de GOBS (recomendado)
+              </label>
+              <input type="radio" class="btn-check" name="modo_carga" id="modo-manual" onchange="cambiarModoCarga('manual')">
+              <label class="btn btn-outline-primary btn-sm" for="modo-manual">
+                <i class="bi bi-file-earmark-arrow-up me-1"></i>Cargar archivo manual (mismo día)
+              </label>
+            </div>
+          </div>
+          {% endif %}
+
           {% for field in form %}
+            {% if field.name == "declaraciones" or field.name == "actividades" %}
+          <div class="mb-3 campo-manual" {% if form.permite_manual_con_gobs %}hidden{% endif %}>
+            <label class="form-label fw-semibold small">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+            {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+            {% elif field.name == "fecha_desde" or field.name == "fecha_hasta" %}
+          <div class="mb-3 campo-gobs">
+            <label class="form-label fw-semibold small">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+            {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+          </div>
+            {% else %}
           <div class="mb-3">
             <label class="form-label fw-semibold small">{{ field.label }}</label>
             {{ field }}
             {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
             {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
           </div>
+            {% endif %}
           {% endfor %}
           <div class="d-flex gap-2 mt-3">
             <button type="submit" class="btn btn-primary" id="btn-ejecutar">
@@ -80,6 +112,11 @@
 {% endblock %}
 {% block extra_js %}
 <script>
+function cambiarModoCarga(modo) {
+  var esGobs = modo === 'gobs';
+  document.querySelectorAll('.campo-gobs').forEach(function (el) { el.hidden = !esGobs; });
+  document.querySelectorAll('.campo-manual').forEach(function (el) { el.hidden = esGobs; });
+}
 document.getElementById("ejecutar-form").addEventListener("submit", function(){
   var btn = document.getElementById("btn-ejecutar");
   btn.disabled = true;
