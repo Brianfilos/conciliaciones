@@ -96,14 +96,23 @@ def calcular(municipio, filtros):
     tiene_csv = InsumoDefinicion.objects.filter(
         proceso__municipio=municipio, nombre_campo="cxc_csv").exists()
 
+    # Import local: evita el ciclo de imports (unicos.py ya importa de aquí clave_periodo/normalizar_pago)
+    from etl.services import unicos as _unicos
+    unicos_por_proceso = {p.id: _unicos.calcular(p) for p in procesos}
+    ids_unicos = {i for ids_u, _, _ in unicos_por_proceso.values() for i in ids_u}
+
     raw = (EncabezadoCXC.objects.filter(proceso__municipio=municipio, proceso__activo=True)
-           .values_list("proceso_id", "estado_pago", "estado_cxc", "total_a_pagar", "fecha_cobro",
+           .values_list("id", "proceso_id", "estado_pago", "estado_cxc", "total_a_pagar", "fecha_cobro",
                         "datos_extra__ano", "datos_extra__periodo", "razon_social", "primer_nombre",
                         "primer_apellido", "numero_documento", "consecutivo_cxc"))
-    filas = []
-    for pid, ep, ec, total, fecha, ano, periodo, razon, nom, ape, doc, consec in raw.iterator(chunk_size=5000):
+    # filas_todas: cada declaración, con reintentos/correcciones (para la cifra "todas" del
+    # tablero). filas: solo la que "gana" cada vigencia (ver unicos.py) — es lo que se usa
+    # para Pagadas/Pendientes/gráficos/mayores pendientes, para no contar una misma
+    # obligación varias veces.
+    filas_todas, filas = [], []
+    for rid, pid, ep, ec, total, fecha, ano, periodo, razon, nom, ape, doc, consec in raw.iterator(chunk_size=5000):
         clave = clave_periodo(codigo, fecha, ano, periodo)
-        filas.append({
+        r = {
             "proceso": pid,
             "pago": normalizar_pago(ep),
             "cxc": (ec or "").strip().upper() or SIN_CARGAR,
@@ -114,13 +123,16 @@ def calcular(municipio, filtros):
             "doc": doc or "",
             "consec": consec,
             "fecha": fecha,
-        })
-        filas[-1]["buscable"] = _sin_tildes(filas[-1]["nombre"] + " " + filas[-1]["doc"])
+        }
+        r["buscable"] = _sin_tildes(r["nombre"] + " " + r["doc"])
+        filas_todas.append(r)
+        if rid in ids_unicos:
+            filas.append(r)
 
     f = {k: filtros.get(k) for k in ("proceso", "ano", "pago", "cxc", "periodo", "doc", "q")}
     palabras = _sin_tildes(f["q"]).split() if f["q"] else []
 
-    def aplicar(excluir=()):
+    def aplicar(excluir=(), datos=None):
         def ok(r):
             return ((("proceso" in excluir) or not f["proceso"] or r["proceso"] == f["proceso"])
                     and (("ano" in excluir) or not f["ano"] or r["ano"] == f["ano"])
@@ -129,17 +141,22 @@ def calcular(municipio, filtros):
                     and (("periodo" in excluir) or not f["periodo"] or r["periodo"] == f["periodo"])
                     and (not f["doc"] or r["doc"] == f["doc"])
                     and all(w in r["buscable"] for w in palabras))
-        return [r for r in filas if ok(r)]
+        return [r for r in (datos if datos is not None else filas) if ok(r)]
 
     activas = aplicar()
     n = len(activas)
-    valor = sum(r["valor"] for r in activas)
     pagadas = [r for r in activas if r["pago"] == "PAGADO"]
     pend = [r for r in activas if r["pago"] == "PENDIENTE"]
     sin_cargar = [r for r in activas if r["cxc"] == SIN_CARGAR]
 
+    activas_todas = aplicar(datos=filas_todas)
+
     kpi = {
-        "total": n, "valor": valor,
+        # "Declaraciones": todas, con reintentos (coherente con su propia etiqueta en el tablero).
+        "total": len(activas_todas), "valor": sum(r["valor"] for r in activas_todas),
+        # Base para los porcentajes de Pagadas/Pendientes: el total ya deduplicado, no el de arriba
+        # (si no, los % quedarían mal — numerador deduplicado sobre denominador sin deduplicar).
+        "total_unico": n,
         "pagadas": len(pagadas), "pagadas_valor": sum(r["valor"] for r in pagadas),
         "pendientes": len(pend), "pendientes_valor": sum(r["valor"] for r in pend),
         "en_sistema": n - len(sin_cargar), "sin_cargar": len(sin_cargar),
@@ -190,15 +207,13 @@ def calcular(municipio, filtros):
     cnt = defaultdict(lambda: {"PAGADO": 0, "PENDIENTE": 0})
     for r in base:
         cnt[r["proceso"]][r["pago"]] += 1
-    # Import local: evita el ciclo de imports (unicos.py ya importa de aquí clave_periodo/normalizar_pago)
-    from etl.services import unicos as _unicos
     lista_procesos = []
     for p in procesos:
-        ids_unicos, ids_excluidos, _ = _unicos.calcular(p)
+        ids_u, ids_e, _ = unicos_por_proceso[p.id]
         lista_procesos.append({
             "id": p.id, "codigo": p.codigo, "nombre": p.nombre,
             "pagado": cnt[p.id]["PAGADO"], "pendiente": cnt[p.id]["PENDIENTE"],
-            "unicos": len(ids_unicos), "duplicadas": len(ids_excluidos),
+            "unicos": len(ids_u), "duplicadas": len(ids_e),
             "unicos_url": reverse("reporteria_unicos", args=[p.id]),
         })
 

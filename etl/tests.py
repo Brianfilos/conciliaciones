@@ -1081,3 +1081,52 @@ class UnicosServiceCaldasEnvigadoTests(TestCase):
         ids_u, ids_e, _ = unicos.calcular(self.p)
         self.assertEqual(set(ids_u), {bim2.id, bim3.id})
         self.assertEqual(ids_e, [])
+
+
+class ReporteriaDeduplicaTests(TestCase):
+    """calcular(): los KPIs y gráficos principales deben contar cada vigencia una sola vez,
+    no una por cada reintento/corrección (ver services/unicos.py)."""
+
+    def setUp(self):
+        from datetime import date
+        self.mun = Municipio.objects.create(codigo="REPDEDUP", nombre="Municipio Reporteria Dedup")
+        self.p = Proceso.objects.create(municipio=self.mun, codigo="CXC_AUTO", nombre="Autorretención")
+        u = User.objects.create_user("repdedup", "repdedup@example.com", "Dedup#2026", municipio=self.mun)
+        ej = Ejecucion.objects.create(proceso=self.p, usuario=u)
+        # Misma vigencia (documento + mes de fecha_cobro), dos declaraciones: gana la pagada.
+        EncabezadoCXC.objects.create(proceso=self.p, ejecucion=ej, consecutivo_cxc="1", consecutivo_original="1",
+            numero_documento="900111", fecha_cobro=date(2026, 5, 1), estado_pago="PENDIENTE DE PAGO",
+            total_a_pagar=100)
+        EncabezadoCXC.objects.create(proceso=self.p, ejecucion=ej, consecutivo_cxc="2", consecutivo_original="2",
+            numero_documento="900111", fecha_cobro=date(2026, 5, 20), estado_pago="PAGO REALIZADO",
+            total_a_pagar=100)
+        # Otro contribuyente, sin duplicado.
+        EncabezadoCXC.objects.create(proceso=self.p, ejecucion=ej, consecutivo_cxc="3", consecutivo_original="3",
+            numero_documento="900222", fecha_cobro=date(2026, 6, 1), estado_pago="PENDIENTE DE PAGO",
+            total_a_pagar=200)
+
+    def test_total_bruto_cuenta_todo_pero_pagadas_pendientes_deduplican(self):
+        from etl.services import reporteria
+        d = reporteria.calcular(self.mun, {})
+        k = d["kpi"]
+        self.assertEqual(k["total"], 3)            # crudo: las 3 filas
+        self.assertEqual(k["total_unico"], 2)       # deduplicado: 2 vigencias
+        self.assertEqual(k["pagadas"], 1)           # la duplicada ganadora (pagada)
+        self.assertEqual(k["pendientes"], 1)        # el otro contribuyente
+        self.assertEqual(k["pagadas"] + k["pendientes"], k["total_unico"])
+
+    def test_por_proceso_tambien_deduplicado(self):
+        from etl.services import reporteria
+        d = reporteria.calcular(self.mun, {})
+        proc = next(p for p in d["procesos"] if p["id"] == self.p.id)
+        self.assertEqual(proc["pagado"] + proc["pendiente"], 2)
+        self.assertEqual(proc["unicos"], 2)
+        self.assertEqual(proc["duplicadas"], 1)
+
+    def test_mayores_pendientes_no_duplica_valor(self):
+        """El contribuyente con el duplicado quedó pagado (no pendiente); el total pendiente
+        que se ve en 'mayores saldos' debe ser solo el del otro contribuyente (200), no 300."""
+        from etl.services import reporteria
+        d = reporteria.calcular(self.mun, {})
+        valores = [t["valor"] for t in d["top_pendientes"]]
+        self.assertEqual(sum(valores), 200)

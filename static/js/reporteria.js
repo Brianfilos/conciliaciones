@@ -264,9 +264,9 @@
   /* ── Resumen en una frase ───────────────────────────────────── */
   function renderHeadline() {
     const k = datos.kpi, el_ = $('rp-headline');
-    if (!k.total) { el_.hidden = true; return; }
+    if (!k.total_unico) { el_.hidden = true; return; }
     el_.hidden = false;
-    const pctPagado = Math.round(100 * k.pagadas / k.total);
+    const pctPagado = Math.round(100 * k.pagadas / k.total_unico);
     const frase = `${pctPagado}% de las declaraciones de ${datos.municipio.nombre} están pagadas`
       + (k.pendientes ? `; quedan ${money(k.pendientes_valor)} por cobrar en ${nf.format(k.pendientes)} declaraciones pendientes.` : '.');
     const kids = [el('div', { class: 'rp-headline-main', text: frase })];
@@ -291,11 +291,11 @@
         el('a', { href: '#card-unicos', class: 'rp-kpi-nota-link' }, ' → ver')]
       : null;
     cont.append(kpi({ hero: true, etiqueta: 'Declaraciones (todas, incluye reintentos)', valor: nf.format(k.total), sub: 'Valor total ' + money(k.valor), titulo: moneyFull(k.valor), nota: notaDeclaraciones }));
-    cont.append(kpi({ etiqueta: 'Pagadas', color: S1, valor: nf.format(k.pagadas), sub: pct(k.pagadas, k.total) + ' · ' + money(k.pagadas_valor), titulo: moneyFull(k.pagadas_valor), meter: k.total ? 100 * k.pagadas / k.total : 0, on: st.pago === 'PAGADO', clic: () => alternar('pago', 'PAGADO') }));
-    cont.append(kpi({ etiqueta: 'Pendientes de pago', color: S2, valor: nf.format(k.pendientes), sub: pct(k.pendientes, k.total) + ' · ' + money(k.pendientes_valor) + ' por cobrar', titulo: moneyFull(k.pendientes_valor), meter: k.total ? 100 * k.pendientes / k.total : 0, on: st.pago === 'PENDIENTE', clic: () => alternar('pago', 'PENDIENTE') }));
+    cont.append(kpi({ etiqueta: 'Pagadas', color: S1, valor: nf.format(k.pagadas), sub: pct(k.pagadas, k.total_unico) + ' · ' + money(k.pagadas_valor), titulo: moneyFull(k.pagadas_valor), meter: k.total_unico ? 100 * k.pagadas / k.total_unico : 0, on: st.pago === 'PAGADO', clic: () => alternar('pago', 'PAGADO') }));
+    cont.append(kpi({ etiqueta: 'Pendientes de pago', color: S2, valor: nf.format(k.pendientes), sub: pct(k.pendientes, k.total_unico) + ' · ' + money(k.pendientes_valor) + ' por cobrar', titulo: moneyFull(k.pendientes_valor), meter: k.total_unico ? 100 * k.pendientes / k.total_unico : 0, on: st.pago === 'PENDIENTE', clic: () => alternar('pago', 'PENDIENTE') }));
     if (csv) {
-      cont.append(kpi({ etiqueta: 'En el sistema (CSV)', color: S1, valor: nf.format(k.en_sistema), sub: pct(k.en_sistema, k.total) + ' de las declaraciones', meter: k.total ? 100 * k.en_sistema / k.total : 0 }));
-      cont.append(kpi({ etiqueta: 'Sin cargar en el sistema', color: S2, valor: nf.format(k.sin_cargar), sub: nf.format(k.sin_cargar_pagadas) + ' de ellas ya están pagadas', meter: k.total ? 100 * k.sin_cargar / k.total : 0, on: st.cxc === 'SIN_CARGAR', clic: () => alternar('cxc', 'SIN_CARGAR') }));
+      cont.append(kpi({ etiqueta: 'En el sistema (CSV)', color: S1, valor: nf.format(k.en_sistema), sub: pct(k.en_sistema, k.total_unico) + ' de las declaraciones', meter: k.total_unico ? 100 * k.en_sistema / k.total_unico : 0 }));
+      cont.append(kpi({ etiqueta: 'Sin cargar en el sistema', color: S2, valor: nf.format(k.sin_cargar), sub: nf.format(k.sin_cargar_pagadas) + ' de ellas ya están pagadas', meter: k.total_unico ? 100 * k.sin_cargar / k.total_unico : 0, on: st.cxc === 'SIN_CARGAR', clic: () => alternar('cxc', 'SIN_CARGAR') }));
     }
   }
 
