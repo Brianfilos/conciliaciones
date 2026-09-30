@@ -1046,3 +1046,38 @@ class ReporteUnicosViewTests(TestCase):
         self.client.force_login(self.u_otro)
         r = self.client.get(reverse("reporteria_unicos", args=[self.p.id]))
         self.assertEqual(r.status_code, 302)
+
+
+class UnicosServiceCaldasEnvigadoTests(TestCase):
+    """Caldas/Envigado agrupan la vigencia por año+bimestre (datos_extra), no por el mes
+    de fecha_cobro como el resto — camino de clave_periodo que UnicosServiceTests no cubre."""
+
+    def setUp(self):
+        self.mun = Municipio.objects.create(codigo="CALDAS", nombre="Caldas Únicos Test")
+        self.p = Proceso.objects.create(municipio=self.mun, codigo="CXC_AUTO", nombre="Autorretención")
+        u = User.objects.create_user("caldasunicos", "caldasunicos@example.com", "Caldas#2026", municipio=self.mun)
+        self.ej = Ejecucion.objects.create(proceso=self.p, usuario=u)
+
+    def _crear(self, consec, doc, fecha, estado, ano, periodo, total=100):
+        from datetime import date as _date
+        return EncabezadoCXC.objects.create(
+            proceso=self.p, ejecucion=self.ej, consecutivo_cxc=consec, consecutivo_original=consec,
+            numero_documento=doc, fecha_cobro=_date.fromisoformat(fecha), estado_pago=estado,
+            total_a_pagar=total, datos_extra={"ano": ano, "periodo": periodo})
+
+    def test_agrupa_por_bimestre_no_por_mes_de_fecha(self):
+        from etl.services import unicos
+        pendiente = self._crear("1", "800999", "2026-03-05", "PENDIENTE DE PAGO", "2026", "2")
+        pagada = self._crear("2", "800999", "2026-04-20", "PAGO REALIZADO", "2026", "2")  # mismo bimestre, mes distinto
+        ids_u, ids_e, dup = unicos.calcular(self.p)
+        self.assertEqual(ids_u, [pagada.id])
+        self.assertEqual(ids_e, [pendiente.id])
+        self.assertEqual(dup[pagada.id], 1)
+
+    def test_distinto_bimestre_mismo_documento_no_se_fusiona(self):
+        from etl.services import unicos
+        bim2 = self._crear("1", "800999", "2026-04-20", "PAGO REALIZADO", "2026", "2")
+        bim3 = self._crear("2", "800999", "2026-05-01", "PENDIENTE DE PAGO", "2026", "3")
+        ids_u, ids_e, _ = unicos.calcular(self.p)
+        self.assertEqual(set(ids_u), {bim2.id, bim3.id})
+        self.assertEqual(ids_e, [])
