@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}Export completo — {{ municipio.nombre }}{% endblock %}
+{% block breadcrumb %}
+ &rsaquo; <a href="{% url 'reporteria' %}">Reportería</a>
+ &rsaquo; <span>Export completo</span>
+{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="card shadow-sm">
+      <div class="card-header" style="background:var(--color-primario);color:#fff;">
+        <h5 class="mb-0"><i class="bi bi-file-earmark-spreadsheet me-2"></i>Export completo de GOBS</h5>
+      </div>
+      <div class="card-body">
+        <p class="text-muted small">
+          Las columnas tal como están en GOBS (las mismas del Excel original), no solo las que el
+          sistema ya normalizó. Se vuelve a consultar GOBS al generar el archivo.
+          {% if pago == "PAGADO" %}Filtro actual: <strong>pagadas</strong>.
+          {% elif pago == "PENDIENTE" %}Filtro actual: <strong>pendientes de pago</strong>.
+          {% else %}Sin filtro de pago (todas).{% endif %}
+          {% if ano %} Año <strong>{{ ano }}</strong>.{% endif %}
+        </p>
+
+        {% if error %}<div class="alert alert-warning small">{{ error }}</div>{% endif %}
+
+        <form method="get" id="form-export-completo">
+          {% if pago %}<input type="hidden" name="pago" value="{{ pago }}">{% endif %}
+          {% if ano %}<input type="hidden" name="ano" value="{{ ano }}">{% endif %}
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Proceso</label>
+            <select name="proceso" class="form-select" onchange="this.form.submit()">
+              {% for p in procesos %}
+              <option value="{{ p.id }}" {% if p.id == proceso.id %}selected{% endif %}>{{ p.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-3 form-check">
+            <input type="checkbox" class="form-check-input" id="dup" name="dup" value="1" {% if incluir_duplicados %}checked{% endif %}>
+            <label class="form-check-label small" for="dup">
+              Incluir declaraciones duplicadas (reintentos/correcciones). Sin marcar, solo trae
+              una por vigencia — la misma que usa el resto del tablero.
+            </label>
+          </div>
+
+          <div class="mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <label class="form-label fw-semibold small mb-0">Columnas ({{ disponibles|length }} disponibles)</label>
+              <div class="d-flex gap-2">
+                <button type="button" class="btn btn-link btn-sm p-0" onclick="marcarTodas(true)">Marcar todas</button>
+                <button type="button" class="btn btn-link btn-sm p-0" onclick="marcarTodas(false)">Ninguna</button>
+              </div>
+            </div>
+            <div class="border rounded p-2" style="max-height:340px;overflow-y:auto;">
+              {% for c in disponibles %}
+              <div class="form-check">
+                <input type="checkbox" class="form-check-input col-check" id="col-{{ forloop.counter }}"
+                       name="col" value="{{ c }}" {% if c in elegidas %}checked{% endif %}>
+                <label class="form-check-label small" for="col-{{ forloop.counter }}">{{ c }}</label>
+              </div>
+              {% empty %}
+              <p class="text-muted small mb-0">Este proceso no tiene fuente GOBS.</p>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="d-flex gap-2 align-items-center">
+            <button type="submit" name="descargar" value="1" class="btn btn-primary" id="btn-descargar-completo" onclick="iniciarDescarga()">
+              <i class="bi bi-download me-1"></i>Descargar Excel
+            </button>
+            <a href="{% url 'reporteria' %}" class="btn btn-outline-secondary">Volver</a>
+            <span class="text-muted small" id="aviso-espera" hidden>Puede tardar 20-30 segundos: vuelve a consultar GOBS.</span>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+function marcarTodas(valor) {
+  document.querySelectorAll('.col-check').forEach(function (el) { el.checked = valor; });
+}
+function iniciarDescarga() {
+  var btn = document.getElementById('btn-descargar-completo');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Consultando GOBS...';
+  document.getElementById('aviso-espera').hidden = false;
+}
+</script>
+{% endblock %}

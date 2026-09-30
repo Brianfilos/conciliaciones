@@ -218,6 +218,21 @@ def _leer_vista(conn, schema, vista, donde=None, params=()):
         return pd.DataFrame(cur.fetchall(), columns=cols)
 
 
+def columnas(fuente: Fuente) -> list[str]:
+    """Nombres de columna de la vista de declaraciones, en el mismo estilo que los Excel
+    (para un selector de columnas en un export). No trae datos (LIMIT 0): rápido."""
+    from psycopg2 import sql
+    conn = _conectar()
+    try:
+        q = sql.SQL("SELECT * FROM {}.{} LIMIT 0").format(
+            sql.Identifier(fuente.schema), sql.Identifier(fuente.declaraciones))
+        with conn.cursor() as cur:
+            cur.execute(q)
+            return [a_estilo_excel(d.name) for d in cur.description]
+    finally:
+        conn.close()
+
+
 def _cruzar_establecimientos(conn, fuente, dec):
     """Agrega nombres/documento del contribuyente a la declaración."""
     from psycopg2 import sql

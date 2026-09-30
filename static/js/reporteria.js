@@ -32,6 +32,16 @@
   const cap = s => s.charAt(0) + s.slice(1).toLowerCase();
   const nombreCxc = c => (c === 'SIN_CARGAR' ? 'Sin cargar en el sistema' : cap(c));
   const nombrePago = p => (p === 'PAGADO' ? 'Pagadas' : 'Pendientes');
+  // Enlace al export con columnas crudas de GOBS (ver views_reporteria.ExportarCompletoView),
+  // con los filtros activos del tablero (si hay un proceso elegido, ya lo trae marcado).
+  function urlExportCompleto(pago) {
+    const qs = new URLSearchParams();
+    if (pago) qs.set('pago', pago);
+    if (st.ano) qs.set('ano', st.ano);
+    if (st.proceso) qs.set('proceso', st.proceso);
+    const q = qs.toString();
+    return root.dataset.exportCompleto + (q ? '?' + q : '');
+  }
 
   function el(tag, attrs, ...kids) {
     const e = SVG_TAGS.has(tag) ? document.createElementNS(NS, tag) : document.createElement(tag);
@@ -291,8 +301,8 @@
         el('a', { href: '#card-unicos', class: 'rp-kpi-nota-link' }, ' → ver')]
       : null;
     cont.append(kpi({ hero: true, etiqueta: 'Declaraciones (todas, incluye reintentos)', valor: nf.format(k.total), sub: 'Valor total ' + money(k.valor), titulo: moneyFull(k.valor), nota: notaDeclaraciones }));
-    cont.append(kpi({ etiqueta: 'Pagadas', color: S1, valor: nf.format(k.pagadas), sub: pct(k.pagadas, k.total_unico) + ' · ' + money(k.pagadas_valor), titulo: moneyFull(k.pagadas_valor), meter: k.total_unico ? 100 * k.pagadas / k.total_unico : 0, on: st.pago === 'PAGADO', clic: () => alternar('pago', 'PAGADO') }));
-    cont.append(kpi({ etiqueta: 'Pendientes de pago', color: S2, valor: nf.format(k.pendientes), sub: pct(k.pendientes, k.total_unico) + ' · ' + money(k.pendientes_valor) + ' por cobrar', titulo: moneyFull(k.pendientes_valor), meter: k.total_unico ? 100 * k.pendientes / k.total_unico : 0, on: st.pago === 'PENDIENTE', clic: () => alternar('pago', 'PENDIENTE') }));
+    cont.append(kpi({ etiqueta: 'Pagadas', color: S1, valor: nf.format(k.pagadas), sub: pct(k.pagadas, k.total_unico) + ' · ' + money(k.pagadas_valor), titulo: moneyFull(k.pagadas_valor), meter: k.total_unico ? 100 * k.pagadas / k.total_unico : 0, on: st.pago === 'PAGADO', clic: () => alternar('pago', 'PAGADO'), nota: k.pagadas ? el('a', { href: urlExportCompleto('PAGADO'), class: 'rp-kpi-nota-link', onclick: e => e.stopPropagation() }, 'Descargar Excel completo →') : null }));
+    cont.append(kpi({ etiqueta: 'Pendientes de pago', color: S2, valor: nf.format(k.pendientes), sub: pct(k.pendientes, k.total_unico) + ' · ' + money(k.pendientes_valor) + ' por cobrar', titulo: moneyFull(k.pendientes_valor), meter: k.total_unico ? 100 * k.pendientes / k.total_unico : 0, on: st.pago === 'PENDIENTE', clic: () => alternar('pago', 'PENDIENTE'), nota: k.pendientes ? el('a', { href: urlExportCompleto('PENDIENTE'), class: 'rp-kpi-nota-link', onclick: e => e.stopPropagation() }, 'Descargar Excel completo →') : null }));
     if (csv) {
       cont.append(kpi({ etiqueta: 'En el sistema (CSV)', color: S1, valor: nf.format(k.en_sistema), sub: pct(k.en_sistema, k.total_unico) + ' de las declaraciones', meter: k.total_unico ? 100 * k.en_sistema / k.total_unico : 0 }));
       cont.append(kpi({ etiqueta: 'Sin cargar en el sistema', color: S2, valor: nf.format(k.sin_cargar), sub: nf.format(k.sin_cargar_pagadas) + ' de ellas ya están pagadas', meter: k.total_unico ? 100 * k.sin_cargar / k.total_unico : 0, on: st.cxc === 'SIN_CARGAR', clic: () => alternar('cxc', 'SIN_CARGAR') }));
@@ -484,6 +494,7 @@
   /* ── Mayores saldos pendientes ──────────────────────────────── */
   function renderTop() {
     const rows = datos.top_pendientes, body = $('top-body');
+    clear($('top-tools')).append(el('a', { class: 'rp-btn', href: urlExportCompleto('PENDIENTE') }, 'Descargar Excel completo'));
     if (!rows.length) return vacio(body, st.pago === 'PAGADO' ? 'Con el filtro "Pagadas" no hay saldos pendientes.' : 'No hay saldos pendientes con estos filtros.');
     const max = Math.max(...rows.map(r => r.valor), 1);
     clear(body).append(el('div', { class: 'rp-table-scroll' }, el('table', { class: 'rp-table rp-table-top' },

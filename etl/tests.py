@@ -1130,3 +1130,119 @@ class ReporteriaDeduplicaTests(TestCase):
         d = reporteria.calcular(self.mun, {})
         valores = [t["valor"] for t in d["top_pendientes"]]
         self.assertEqual(sum(valores), 200)
+
+
+class ExportCompletoServiceTests(TestCase):
+    def setUp(self):
+        from datetime import date
+        self.mun = Municipio.objects.create(codigo="EXPCOMPLETO", nombre="Municipio Export Completo")
+        self.p = Proceso.objects.create(municipio=self.mun, codigo="CXC_AUTO", nombre="Autorretención")
+        u = User.objects.create_user("expcompleto", "expcompleto@example.com", "Exp#2026", municipio=self.mun)
+        ej = Ejecucion.objects.create(proceso=self.p, usuario=u)
+        self.e1 = EncabezadoCXC.objects.create(proceso=self.p, ejecucion=ej, consecutivo_cxc="9040001",
+            consecutivo_original="1", numero_documento="900", fecha_cobro=date(2026, 5, 1),
+            estado_pago="PAGO REALIZADO", total_a_pagar=100)
+        self.e2 = EncabezadoCXC.objects.create(proceso=self.p, ejecucion=ej, consecutivo_cxc="9040002",
+            consecutivo_original="2", numero_documento="901", fecha_cobro=date(2026, 5, 2),
+            estado_pago="PENDIENTE DE PAGO", total_a_pagar=200)
+
+    def test_columnas_disponibles_sin_fuente_gobs(self):
+        from etl.services import export_completo
+        self.assertEqual(export_completo.columnas_disponibles("EXPCOMPLETO", "CXC_AUTO"), [])
+
+    def test_generar_sin_fuente_gobs_devuelve_vacio(self):
+        from etl.services import export_completo
+        headers, filas = export_completo.generar(self.p, {}, None, False)
+        self.assertEqual(headers, [])
+        self.assertEqual(filas, [])
+
+    def _fuente_falsa(self):
+        from etl.services.gobs_pg import Fuente
+        return Fuente(schema="esq", declaraciones="vista", col_consecutivo="Consecutivo")
+
+    def _df_falso(self):
+        import pandas as pd
+        return pd.DataFrame([
+            {"Consecutivo": 1, "Nombre": "Ana", "Otro": "x"},
+            {"Consecutivo": 2, "Nombre": "Beto", "Otro": "y"},
+            {"Consecutivo": 999, "Nombre": "NoDebeSalir", "Otro": "z"},
+        ])
+
+    def test_generar_filtra_por_consecutivo_y_columnas_elegidas(self):
+        from unittest.mock import patch
+        from etl.services import export_completo
+        with patch("etl.services.export_completo.gobs_pg.fuente_para", return_value=self._fuente_falsa()), \
+             patch("etl.services.export_completo.gobs_pg.cargar", return_value=({"declaraciones": self._df_falso()}, {})):
+            headers, filas = export_completo.generar(self.p, {}, ["Nombre"], incluir_duplicados=True)
+        self.assertEqual(headers, ["Nombre"])
+        self.assertEqual(sorted(f[0] for f in filas), ["Ana", "Beto"])
+
+    def test_generar_respeta_filtro_de_pago(self):
+        from unittest.mock import patch
+        from etl.services import export_completo
+        with patch("etl.services.export_completo.gobs_pg.fuente_para", return_value=self._fuente_falsa()), \
+             patch("etl.services.export_completo.gobs_pg.cargar", return_value=({"declaraciones": self._df_falso()}, {})):
+            headers, filas = export_completo.generar(
+                self.p, {"pago": "PAGADO"}, ["Nombre"], incluir_duplicados=True)
+        self.assertEqual([f[0] for f in filas], ["Ana"])
+
+    def test_sin_columnas_elegidas_trae_todas(self):
+        from unittest.mock import patch
+        from etl.services import export_completo
+        with patch("etl.services.export_completo.gobs_pg.fuente_para", return_value=self._fuente_falsa()), \
+             patch("etl.services.export_completo.gobs_pg.cargar", return_value=({"declaraciones": self._df_falso()}, {})):
+            headers, filas = export_completo.generar(self.p, {}, None, incluir_duplicados=True)
+        self.assertEqual(headers, ["Consecutivo", "Nombre", "Otro"])
+
+
+class ExportarCompletoViewTests(TestCase):
+    def setUp(self):
+        self.mun = Municipio.objects.create(codigo="EXPVISTA", nombre="Municipio Export Vista")
+        self.otro_mun = Municipio.objects.create(codigo="EXPVISTAOTRO", nombre="Otro Municipio")
+        self.p = Proceso.objects.create(municipio=self.mun, codigo="CXC_AUTO", nombre="Autorretención")
+        self.u = User.objects.create_user("expvista", "expvista@example.com", "Exp#2026", municipio=self.mun)
+        self.u_otro = User.objects.create_user("expvistaotro", "expvistaotro@example.com", "Exp#2026", municipio=self.otro_mun)
+
+    def _fuente_falsa(self):
+        from etl.services.gobs_pg import Fuente
+        return Fuente(schema="esq", declaraciones="vista", col_consecutivo="Consecutivo")
+
+    def test_sin_proceso_con_gobs_redirige_a_reporteria(self):
+        self.client.force_login(self.u)
+        r = self.client.get(reverse("reporteria_exportar_completo"))
+        self.assertRedirects(r, reverse("reporteria"))
+
+    def test_muestra_el_selector_de_columnas(self):
+        from unittest.mock import patch
+        with patch("etl.services.gobs_pg.fuente_para", return_value=self._fuente_falsa()), \
+             patch("etl.services.export_completo.gobs_pg.columnas", return_value=["Consecutivo", "Nombre"]):
+            self.client.force_login(self.u)
+            r = self.client.get(reverse("reporteria_exportar_completo"))
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, "Consecutivo")
+        self.assertContains(r, "Nombre")
+
+    def test_usuario_de_otro_municipio_no_puede_ver_el_selector(self):
+        from unittest.mock import patch
+        with patch("etl.services.gobs_pg.fuente_para", return_value=self._fuente_falsa()):
+            self.client.force_login(self.u_otro)
+            r = self.client.get(reverse("reporteria_exportar_completo") + f"?proceso={self.p.id}")
+        # el proceso pedido no es de su municipio y tampoco tiene uno propio con GOBS: a reportería
+        self.assertRedirects(r, reverse("reporteria"))
+
+    def test_descargar_genera_el_excel(self):
+        from unittest.mock import patch
+        import pandas as pd
+        df = pd.DataFrame([{"Consecutivo": 1, "Nombre": "Ana"}])
+        with patch("etl.services.gobs_pg.fuente_para", return_value=self._fuente_falsa()), \
+             patch("etl.services.export_completo.gobs_pg.columnas", return_value=["Consecutivo", "Nombre"]), \
+             patch("etl.services.export_completo.gobs_pg.fuente_para", return_value=self._fuente_falsa()), \
+             patch("etl.services.export_completo.gobs_pg.cargar", return_value=({"declaraciones": df}, {})):
+            self.client.force_login(self.u)
+            r = self.client.get(reverse("reporteria_exportar_completo"),
+                                {"proceso": self.p.id, "descargar": "1", "col": ["Consecutivo", "Nombre"]})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(
+            r["Content-Type"],
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        self.assertIn("EXPVISTA_CXC_AUTO_completo.xlsx", r["Content-Disposition"])
