@@ -71,6 +71,9 @@ button.rp-kpi:hover { box-shadow: var(--shadow-md); transform: translateY(-1px);
 .rp-kpi-v { font-size: 1.9rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; margin-top: 4px; }
 .rp-kpi-hero .rp-kpi-v { font-size: 3.25rem; line-height: 1.05; }
 .rp-kpi-s { font-size: .8rem; color: var(--ink-3); margin-top: 4px; }
+.rp-kpi-nota { font-size: .76rem; color: var(--ink-3); margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--grid); }
+.rp-kpi-nota-link { color: var(--s1); text-decoration: none; font-weight: 600; }
+.rp-kpi-nota-link:hover { text-decoration: underline; }
 .rp-dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex: none; }
 .rp-meter { height: 6px; border-radius: 99px; background: var(--wash); margin-top: 12px; overflow: hidden; }
 .rp-meter i { display: block; height: 100%; border-radius: 99px; transition: width .4s var(--ease-out, ease); }
@@ -95,9 +98,10 @@ button.rp-kpi:hover { box-shadow: var(--shadow-md); transform: translateY(-1px);
 
 /* SVG */
 .rp svg { display: block; width: 100%; height: auto; overflow: visible; }
-.rp svg text { font-family: inherit; fill: var(--ink-3); font-size: 11px; }
+.rp svg text { font-family: inherit; fill: var(--ink-2); font-size: 12px; }
 .rp svg .t-ink { fill: var(--ink); }
 .rp svg .t-2 { fill: var(--ink-2); }
+.rp svg .t-total { fill: var(--ink); font-size: 12px; font-weight: 700; }
 .rp svg .grid { stroke: var(--grid); stroke-width: 1; }
 .rp svg .axis { stroke: var(--axis); stroke-width: 1; }
 .rp svg .mark { transition: opacity .15s, filter .15s; }

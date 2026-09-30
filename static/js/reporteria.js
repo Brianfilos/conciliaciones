@@ -256,6 +256,7 @@
       el('div', { class: 'rp-kpi-v', text: o.valor }),
       o.sub ? el('div', { class: 'rp-kpi-s', text: o.sub, title: o.titulo || '' }) : null,
       o.meter != null ? el('div', { class: 'rp-meter' }, el('i', { style: `width:${o.meter}%;background:${o.color || S1}` })) : null,
+      o.nota ? el('div', { class: 'rp-kpi-nota' }, o.nota) : null,
     ];
     if (o.clic) return el('button', { type: 'button', class: 'rp-kpi' + (o.hero ? ' rp-kpi-hero' : ''), 'aria-pressed': String(!!o.on), onclick: o.clic }, cuerpo);
     return el('div', { class: 'rp-kpi' + (o.hero ? ' rp-kpi-hero' : '') }, cuerpo);
@@ -280,7 +281,16 @@
   function renderKpis() {
     const k = datos.kpi, csv = datos.municipio.tiene_csv;
     const cont = clear($('rp-kpis'));
-    cont.append(kpi({ hero: true, etiqueta: 'Declaraciones', valor: nf.format(k.total), sub: 'Valor total ' + money(k.valor), titulo: moneyFull(k.valor) }));
+    // "Declaraciones" cuenta cada reintento/corrección por separado; "Declaraciones únicas"
+    // (más abajo) las agrupa por vigencia. Se conectan aquí para que la diferencia no
+    // parezca un error — son dos conteos distintos a propósito.
+    const totalUnicas = datos.procesos.reduce((s, p) => s + (p.unicos || 0), 0);
+    const totalDup = datos.procesos.reduce((s, p) => s + (p.duplicadas || 0), 0);
+    const notaDeclaraciones = totalDup
+      ? [`${nf.format(totalUnicas)} son vigencias únicas; `, `${nf.format(totalDup)} duplicadas por reintentos`,
+        el('a', { href: '#card-unicos', class: 'rp-kpi-nota-link' }, ' → ver')]
+      : null;
+    cont.append(kpi({ hero: true, etiqueta: 'Declaraciones (todas, incluye reintentos)', valor: nf.format(k.total), sub: 'Valor total ' + money(k.valor), titulo: moneyFull(k.valor), nota: notaDeclaraciones }));
     cont.append(kpi({ etiqueta: 'Pagadas', color: S1, valor: nf.format(k.pagadas), sub: pct(k.pagadas, k.total) + ' · ' + money(k.pagadas_valor), titulo: moneyFull(k.pagadas_valor), meter: k.total ? 100 * k.pagadas / k.total : 0, on: st.pago === 'PAGADO', clic: () => alternar('pago', 'PAGADO') }));
     cont.append(kpi({ etiqueta: 'Pendientes de pago', color: S2, valor: nf.format(k.pendientes), sub: pct(k.pendientes, k.total) + ' · ' + money(k.pendientes_valor) + ' por cobrar', titulo: moneyFull(k.pendientes_valor), meter: k.total ? 100 * k.pendientes / k.total : 0, on: st.pago === 'PENDIENTE', clic: () => alternar('pago', 'PENDIENTE') }));
     if (csv) {
@@ -339,6 +349,8 @@
       });
       g.append(hit);
       svg.append(g);
+      const total = A[i] + B[i];
+      if (total > 0) svg.append(el('text', { class: 't-total', x: cx, y: y(total) - 8, 'text-anchor': 'middle', text: fmt(total) }));
       if (i % cadaK === 0) svg.append(el('text', { x: cx, y: H - m.b + 17, 'text-anchor': 'middle', text: T.etiquetas[i] }));
     });
     clear(body).append(svg);
