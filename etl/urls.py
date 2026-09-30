@@ -8,6 +8,7 @@ urlpatterns = [
     path("reporteria/", views_reporteria.ReporteriaView.as_view(), name="reporteria"),
     path("reporteria/datos/", views_reporteria.ReporteriaDatosView.as_view(), name="reporteria_datos"),
     path("reporteria/buscar/", views_reporteria.ReporteriaBuscarView.as_view(), name="reporteria_buscar"),
+    path("reporteria/unicos/<int:proceso_id>/", views_reporteria.ReporteUnicosView.as_view(), name="reporteria_unicos"),
     path("dashboard/<int:proceso_id>/", views.DashboardView.as_view(), name="dashboard"),
     path("exportar/<int:proceso_id>/", views.ExportarView.as_view(), name="exportar"),
     path("exportar/<int:proceso_id>/correo/", views_envio.EnviarExportacionView.as_view(), name="exportar_correo"),

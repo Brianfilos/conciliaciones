@@ -190,10 +190,17 @@ def calcular(municipio, filtros):
     cnt = defaultdict(lambda: {"PAGADO": 0, "PENDIENTE": 0})
     for r in base:
         cnt[r["proceso"]][r["pago"]] += 1
-    lista_procesos = [{
-        "id": p.id, "codigo": p.codigo, "nombre": p.nombre,
-        "pagado": cnt[p.id]["PAGADO"], "pendiente": cnt[p.id]["PENDIENTE"],
-    } for p in procesos]
+    # Import local: evita el ciclo de imports (unicos.py ya importa de aquí clave_periodo/normalizar_pago)
+    from etl.services import unicos as _unicos
+    lista_procesos = []
+    for p in procesos:
+        ids_unicos, ids_excluidos, _ = _unicos.calcular(p)
+        lista_procesos.append({
+            "id": p.id, "codigo": p.codigo, "nombre": p.nombre,
+            "pagado": cnt[p.id]["PAGADO"], "pendiente": cnt[p.id]["PENDIENTE"],
+            "unicos": len(ids_unicos), "duplicadas": len(ids_excluidos),
+            "unicos_url": reverse("reporteria_unicos", args=[p.id]),
+        })
 
     # Mayores saldos pendientes (respeta todos los filtros, solo pendientes)
     top = defaultdict(lambda: [0, 0.0, ""])

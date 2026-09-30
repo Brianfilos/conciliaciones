@@ -938,3 +938,101 @@ class ActualizarGobsCommandTests(TestCase):
 
         self.assertEqual(len(mail.outbox), 2)  # uno por cada proceso (CXC_AUTO y CXC_RETE)
         self.assertIn("CALDAS", mail.outbox[0].subject)
+
+
+class UnicosServiceTests(TestCase):
+    def setUp(self):
+        self.mun = Municipio.objects.create(codigo="UNICOSTEST", nombre="Municipio Únicos")
+        self.p = Proceso.objects.create(municipio=self.mun, codigo="CXC_AUTO", nombre="Autorretención")
+        u = User.objects.create_user("unicosuser", "unicos@example.com", "Unicos#2026", municipio=self.mun)
+        self.ej = Ejecucion.objects.create(proceso=self.p, usuario=u)
+
+    def _crear(self, consec, doc, fecha, estado, total=100):
+        from datetime import date as _date
+        return EncabezadoCXC.objects.create(
+            proceso=self.p, ejecucion=self.ej, consecutivo_cxc=consec, consecutivo_original=consec,
+            numero_documento=doc, fecha_cobro=_date.fromisoformat(fecha), estado_pago=estado,
+            total_a_pagar=total)
+
+    def test_una_sola_declaracion_por_vigencia_no_se_excluye(self):
+        from etl.services import unicos
+        e = self._crear("1", "900", "2026-05-15", "PENDIENTE DE PAGO")
+        ids_u, ids_e, _ = unicos.calcular(self.p)
+        self.assertEqual(ids_u, [e.id])
+        self.assertEqual(ids_e, [])
+
+    def test_duplicado_prioriza_la_pagada_aunque_no_sea_la_mas_reciente(self):
+        from etl.services import unicos
+        pagada = self._crear("1", "900", "2026-05-01", "PAGO REALIZADO")
+        self._crear("2", "900", "2026-05-20", "PENDIENTE DE PAGO")  # más reciente, pero no pagada
+        ids_u, ids_e, dup = unicos.calcular(self.p)
+        self.assertEqual(ids_u, [pagada.id])
+        self.assertEqual(dup[pagada.id], 1)
+
+    def test_duplicado_sin_ninguna_pagada_prioriza_la_mas_reciente(self):
+        from etl.services import unicos
+        self._crear("1", "900", "2026-05-01", "PENDIENTE DE PAGO")
+        reciente = self._crear("2", "900", "2026-05-20", "PENDIENTE DE PAGO")
+        ids_u, ids_e, dup = unicos.calcular(self.p)
+        self.assertEqual(ids_u, [reciente.id])
+        self.assertEqual(dup[reciente.id], 1)
+
+    def test_entre_varias_pagadas_toma_la_mas_reciente(self):
+        from etl.services import unicos
+        self._crear("1", "900", "2026-05-01", "PAGO REALIZADO")
+        pagada_reciente = self._crear("2", "900", "2026-05-20", "PAGO REALIZADO")
+        ids_u, ids_e, dup = unicos.calcular(self.p)
+        self.assertEqual(ids_u, [pagada_reciente.id])
+
+    def test_distinta_vigencia_no_se_agrupan(self):
+        """Mismo documento, año distinto (clave_periodo usa fecha_cobro): cada uno es único."""
+        from etl.services import unicos
+        e1 = self._crear("1", "900", "2026-05-15", "PENDIENTE DE PAGO")
+        e2 = self._crear("2", "900", "2025-05-15", "PENDIENTE DE PAGO")
+        ids_u, ids_e, _ = unicos.calcular(self.p)
+        self.assertEqual(set(ids_u), {e1.id, e2.id})
+        self.assertEqual(ids_e, [])
+
+    def test_sin_documento_no_se_fusiona_con_otros_sin_documento(self):
+        from etl.services import unicos
+        e1 = self._crear("1", "", "2026-05-15", "PENDIENTE DE PAGO")
+        e2 = self._crear("2", "", "2026-05-15", "PENDIENTE DE PAGO")
+        ids_u, ids_e, _ = unicos.calcular(self.p)
+        self.assertEqual(set(ids_u), {e1.id, e2.id})
+
+    def test_build_rows_cuenta_las_declaraciones_excluidas_por_fila(self):
+        from etl.services import unicos
+        self._crear("1", "900", "2026-05-01", "PENDIENTE DE PAGO")
+        self._crear("2", "900", "2026-05-10", "PENDIENTE DE PAGO")
+        pagada = self._crear("3", "900", "2026-05-20", "PAGO REALIZADO")
+        headers, filas_unicas, filas_excluidas = unicos.build_rows(self.p)
+        self.assertEqual(len(filas_unicas), 1)
+        self.assertEqual(filas_unicas[0][0], pagada.consecutivo_cxc)
+        self.assertEqual(filas_unicas[0][-1], 2)  # 2 excluidas se colapsaron en esta
+        self.assertEqual(len(filas_excluidas), 2)
+
+
+class ReporteUnicosViewTests(TestCase):
+    def setUp(self):
+        self.mun = Municipio.objects.create(codigo="UNICOSVIEW", nombre="Municipio Únicos Vista")
+        self.otro_mun = Municipio.objects.create(codigo="UNICOSOTRO", nombre="Otro Municipio")
+        self.p = Proceso.objects.create(municipio=self.mun, codigo="CXC_AUTO", nombre="Autorretención")
+        self.u = User.objects.create_user("unicosview", "unicosview@example.com", "Unicos#2026", municipio=self.mun)
+        self.u_otro = User.objects.create_user("unicosotro", "unicosotro@example.com", "Unicos#2026", municipio=self.otro_mun)
+        ej = Ejecucion.objects.create(proceso=self.p, usuario=self.u)
+        EncabezadoCXC.objects.create(proceso=self.p, ejecucion=ej, consecutivo_cxc="1", consecutivo_original="1",
+                                     numero_documento="900", estado_pago="PAGO REALIZADO", total_a_pagar=100)
+
+    def test_descarga_el_excel_de_unicos(self):
+        self.client.force_login(self.u)
+        r = self.client.get(reverse("reporteria_unicos", args=[self.p.id]))
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(
+            r["Content-Type"],
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        self.assertIn(f"{self.mun.codigo}_CXC_AUTO_unicos.xlsx", r["Content-Disposition"])
+
+    def test_usuario_de_otro_municipio_no_puede_descargar(self):
+        self.client.force_login(self.u_otro)
+        r = self.client.get(reverse("reporteria_unicos", args=[self.p.id]))
+        self.assertEqual(r.status_code, 302)

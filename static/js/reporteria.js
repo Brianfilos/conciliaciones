@@ -435,6 +435,22 @@
     clear(body).append(svg);
   }
 
+  /* ── Declaraciones únicas ───────────────────────────────────── */
+  function renderUnicos() {
+    const ps = datos.procesos.filter(p => p.unicos > 0), card = $('card-unicos');
+    card.hidden = !ps.length;
+    if (card.hidden) return;
+    const body = $('unicos-body');
+    clear(body).append(el('div', { class: 'rp-table-scroll' }, el('table', { class: 'rp-table' },
+      el('thead', {}, el('tr', {}, ['Proceso', 'Únicas', 'Duplicadas excluidas', ''].map((t, i) =>
+        el('th', { class: i > 0 && i < 3 ? 'num' : '', text: t })))),
+      el('tbody', {}, ps.map(p => el('tr', {},
+        el('td', { text: p.nombre }),
+        el('td', { class: 'num', text: nf.format(p.unicos) }),
+        el('td', { class: 'num', text: nf.format(p.duplicadas) }),
+        el('td', {}, el('a', { class: 'rp-btn', href: p.unicos_url, text: 'Descargar' }))))))));
+  }
+
   /* ── Mayores saldos pendientes ──────────────────────────────── */
   function renderTop() {
     const rows = datos.top_pendientes, body = $('top-body');
@@ -460,6 +476,7 @@
     renderCxc();
     renderCruce();
     renderProcesos();
+    renderUnicos();
     $('card-top').classList.toggle('rp-wide', $('card-procesos').hidden);  // sin gráfico vecino, ocupa todo el ancho
     renderTop();
     $('rp-actualizado').textContent = datos.actualizado ? '· Última ejecución: ' + datos.actualizado : '';

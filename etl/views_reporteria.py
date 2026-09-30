@@ -1,13 +1,15 @@
 import re
 
 from django.contrib.auth.decorators import login_required
-from django.http import JsonResponse
-from django.shortcuts import render
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
 from django.views import View
 
+from accounts import permisos
 from muni.models import Municipio
-from .services import reporteria
+from .models import Proceso
+from .services import reporteria, unicos
 
 
 def _municipio(request):
@@ -59,6 +61,45 @@ class ReporteriaDatosView(View):
         if municipio is None:
             return JsonResponse({"error": "Sin municipio"}, status=404)
         return JsonResponse(reporteria.calcular(municipio, _filtros(request)))
+
+
+@method_decorator(login_required, name="dispatch")
+class ReporteUnicosView(View):
+    """Descarga las declaraciones "únicas" del proceso (una por vigencia, ver services/unicos.py)."""
+
+    def get(self, request, proceso_id):
+        proceso = get_object_or_404(Proceso, id=proceso_id)
+        if not permisos.del_municipio(request.user, proceso.municipio):
+            return redirect("reporteria")
+
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill
+
+        headers, filas_unicas, filas_excluidas = unicos.build_rows(proceso)
+
+        wb = openpyxl.Workbook()
+        ws1 = wb.active
+        ws1.title = "unicos"
+        ws1.append(headers)
+        ws2 = wb.create_sheet("excluidas_duplicadas")
+        ws2.append(headers)
+        for ws, filas in ((ws1, filas_unicas), (ws2, filas_excluidas)):
+            for cell in ws[1]:
+                cell.font = Font(bold=True, color="FFFFFF")
+                cell.fill = PatternFill("solid", fgColor="1B3A6B")
+            for fila in filas:
+                ws.append(["" if v is None else v for v in fila])
+
+        import io
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        resp = HttpResponse(
+            buf.read(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        nombre = f"{proceso.municipio.codigo}_{proceso.codigo}_unicos.xlsx"
+        resp["Content-Disposition"] = f'attachment; filename="{nombre}"'
+        return resp
 
 
 @method_decorator(login_required, name="dispatch")
