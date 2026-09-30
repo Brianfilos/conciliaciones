@@ -25,6 +25,7 @@ staticfiles/
 # Carpetas de referencia local (no las necesita el VPS)
 MUNICIPIOS/
 GOBS/
+scripts/
 
 # Archivos de notas y scripts de utilidad
 SESION_*.txt
