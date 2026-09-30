@@ -147,7 +147,11 @@ def calcular(municipio, filtros):
     n = len(activas)
     pagadas = [r for r in activas if r["pago"] == "PAGADO"]
     pend = [r for r in activas if r["pago"] == "PENDIENTE"]
-    sin_cargar = [r for r in activas if r["cxc"] == SIN_CARGAR]
+    # "Sin cargar en el sistema" solo tiene sentido donde hay un CSV de CXC con el que
+    # comparar (Estrella/Copacabana). En los demás municipios el campo "cxc" siempre cae en
+    # SIN_CARGAR por defecto (no hay insumo que lo llene), así que mostrarlo ahí diría que
+    # "nada está en el sistema" cuando en realidad no hay forma de saberlo.
+    sin_cargar = [r for r in activas if r["cxc"] == SIN_CARGAR] if tiene_csv else []
 
     activas_todas = aplicar(datos=filas_todas)
 

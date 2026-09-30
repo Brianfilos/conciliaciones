@@ -1131,6 +1131,20 @@ class ReporteriaDeduplicaTests(TestCase):
         valores = [t["valor"] for t in d["top_pendientes"]]
         self.assertEqual(sum(valores), 200)
 
+    def test_sin_cargar_en_cero_si_el_municipio_no_tiene_csv(self):
+        """'Sin cargar en el sistema' solo tiene sentido donde hay un CSV de CXC con el que
+        comparar (Estrella/Copacabana). Sin ese insumo, el campo 'cxc' cae en SIN_CARGAR por
+        defecto para todos, así que no debe reportarse como si faltara cargar nada (bug real:
+        el titular del tablero decía 'N ya se pagaron pero no aparecen en el sistema' en
+        Envigado, que no tiene forma de cargar/controlar ese estado)."""
+        from etl.services import reporteria
+        d = reporteria.calcular(self.mun, {})
+        k = d["kpi"]
+        self.assertFalse(d["municipio"]["tiene_csv"])
+        self.assertEqual(k["sin_cargar"], 0)
+        self.assertEqual(k["sin_cargar_pagadas"], 0)
+        self.assertEqual(k["en_sistema"], k["total_unico"])
+
 
 class ExportCompletoServiceTests(TestCase):
     def setUp(self):
