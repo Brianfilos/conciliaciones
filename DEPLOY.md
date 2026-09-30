@@ -102,17 +102,37 @@ el mismo rango (los tres procesos usan el mismo archivo, así que basta una sola
    ```bash
    python manage.py actualizar_sofinet --municipio ESTRELLA
    ```
-5. Programarlo de madrugada (después de que GOBS termine su carga diaria):
+5. Programarlo de madrugada, junto con `actualizar_gobs` (ver 5d) — este va 5 minutos después
+   para no competir por la misma conexión a GOBS:
    ```bash
    mkdir -p logs
    crontab -e
    # agregar:
-   0 5 * * * cd /home/ubuntu/app-conciliaciones && venv/bin/python manage.py actualizar_sofinet >> logs/sofinet.log 2>&1
+   5 5 * * * cd /home/ubuntu/app-conciliaciones && venv/bin/python manage.py actualizar_sofinet >> logs/sofinet.log 2>&1
    ```
 
 Si SOFINET cambia esa pantalla del reporte, el bot empieza a fallar (se nota en `logs/sofinet.log`
 o en el correo de alerta); mientras se ajusta, la carga manual desde "Ejecutar proceso" sigue
 funcionando igual que siempre.
+
+## 5d. Refresco nocturno de GOBS (Caldas, Envigado, Sabaneta)
+
+Estrella y Copacabana ya quedan al día con `actualizar_sofinet` (5c). Caldas, Envigado y
+Sabaneta no usan CSV — sus procesos solo dependen de GOBS — así que un comando aparte
+repasa los últimos `GOBS_REFRESH_DIAS` días (90 por defecto) cada noche.
+
+```bash
+python manage.py actualizar_gobs --municipio CALDAS   # probarlo a mano primero
+```
+
+Cron, 5 minutos antes que `actualizar_sofinet` (ambos pueden competir por la misma conexión
+a GOBS, mejor no solaparlos):
+```bash
+0 5 * * * cd /home/ubuntu/app-conciliaciones && venv/bin/python manage.py actualizar_gobs >> logs/gobs.log 2>&1
+```
+
+Usa el mismo `SOFINET_ALERTA_EMAIL` para avisar si algo falla; si `GOBS_PG_ENABLED=False` el
+comando no hace nada (no es un error).
 
 ## 6. Inicializar la base de datos
 
