@@ -26,9 +26,14 @@ _MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", 
 SIN_CARGAR = "SIN_CARGAR"
 
 
+_ESTADOS_PAGADO = ("PAGO REALIZADO", "PAGADAS POR OTROS BANCOS")
+
+
 def normalizar_pago(estado_pago):
-    """'✓ PAGO REALIZADO' / 'Pago realizado' -> PAGADO; cualquier otro -> PENDIENTE."""
-    return "PAGADO" if "PAGO REALIZADO" in (estado_pago or "").upper() else "PENDIENTE"
+    """'✓ PAGO REALIZADO' / 'Pago realizado' / 'Pagadas por otros bancos' -> PAGADO;
+    cualquier otro -> PENDIENTE."""
+    e = (estado_pago or "").upper()
+    return "PAGADO" if any(s in e for s in _ESTADOS_PAGADO) else "PENDIENTE"
 
 
 def clave_periodo(codigo_municipio, fecha, ano, periodo):

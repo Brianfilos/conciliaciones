@@ -194,6 +194,13 @@ class ProcesadorBase:
         dec = pd.merge(dec, cxc[["CONSECUTIVO", "ESTADO"]], left_on="consecutivo_cxc", right_on="CONSECUTIVO", how="left")
         dec.drop(columns=["CONSECUTIVO"], errors="ignore", inplace=True)
         dec["estado_cxc"] = dec.get("ESTADO", "").fillna("").astype(str).str.upper()
+        # GOBS todavía no se entera de estos pagos (se conciliaron por fuera, en el banco);
+        # el CXC ya los tiene como CANCELADA, así que no deben seguir viéndose "pendientes".
+        pendiente_pero_cancelada = (
+            (dec["estado_pago"].astype(str).str.upper() == "PENDIENTE DE PAGO")
+            & (dec["estado_cxc"] == "CANCELADA")
+        )
+        dec.loc[pendiente_pero_cancelada, "estado_pago"] = "PAGADAS POR OTROS BANCOS"
         return dec
 
     def _enc(self, dec):

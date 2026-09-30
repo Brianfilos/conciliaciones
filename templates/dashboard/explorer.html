@@ -704,7 +704,7 @@
           <td class="small text-truncate" style="max-width:220px;" title="{{ obj.descripcion }}">{{ obj.descripcion }}</td>
           {% endif %}
           <td class="text-end small cop-money">{{ obj.total_a_pagar|default:"" }}</td>
-          <td><span class="badge {% if 'PAGO REALIZADO' in obj.estado_pago|upper %}bg-success{% elif obj.estado_pago %}bg-warning text-dark{% else %}bg-secondary{% endif %} small">{% if obj.estado_pago %}{{ obj.estado_pago }}{% else %}—{% endif %}</span></td>
+          <td><span class="badge {% if 'PAGO REALIZADO' in obj.estado_pago|upper or 'PAGADAS POR OTROS BANCOS' in obj.estado_pago|upper %}bg-success{% elif obj.estado_pago %}bg-warning text-dark{% else %}bg-secondary{% endif %} small">{% if obj.estado_pago %}{{ obj.estado_pago }}{% else %}—{% endif %}</span></td>
           {% if not es_envigado and not es_sabaneta %}<td><span class="badge bg-light text-dark border small">{{ obj.estado_cxc|default:"—" }}</span></td>{% endif %}
         </tr>
         {% endif %}{# fin es_caldas encabezado #}

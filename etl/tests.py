@@ -707,3 +707,78 @@ class SabanetaDashboardFechasTests(TestCase):
         html = self.client.get(reverse("dashboard", args=[self.p.id])).content.decode()
         self.assertNotIn("Fecha Venc.", html)
         self.assertNotIn(">Detalle<", html)
+
+
+class MergeCxcTests(TestCase):
+    """_merge_cxc (compartida solo por Estrella y Copacabana): cruce con el CSV de CXC."""
+
+    def setUp(self):
+        self.mun = Municipio.objects.create(codigo="MERGECXC", nombre="Municipio Merge CXC")
+
+    def _procesador(self, csv_texto):
+        from io import StringIO
+        from etl.services.base import ProcesadorBase
+        return ProcesadorBase("CXC_AUTO", {"cxc_csv": StringIO(csv_texto)}, self.mun)
+
+    def test_prioriza_cancelada_sobre_otro_estado_cuando_esta_duplicado(self):
+        import pandas as pd
+        proc = self._procesador("CONSECUTIVO,ESTADO\n100,ANULADA\n100,CANCELADA\n")
+        dec = pd.DataFrame({"consecutivo_cxc": ["100"], "estado_pago": ["PENDIENTE DE PAGO"]})
+        dec = proc._merge_cxc(dec)
+        self.assertEqual(dec.loc[0, "estado_cxc"], "CANCELADA")
+
+    def test_prioriza_cancelada_sin_importar_el_orden_de_las_filas(self):
+        import pandas as pd
+        proc = self._procesador("CONSECUTIVO,ESTADO\n100,CANCELADA\n100,ANULADA\n")
+        dec = pd.DataFrame({"consecutivo_cxc": ["100"], "estado_pago": ["PENDIENTE DE PAGO"]})
+        dec = proc._merge_cxc(dec)
+        self.assertEqual(dec.loc[0, "estado_cxc"], "CANCELADA")
+
+    def test_pendiente_de_pago_con_cxc_cancelada_pasa_a_pagadas_por_otros_bancos(self):
+        import pandas as pd
+        proc = self._procesador("CONSECUTIVO,ESTADO\n100,CANCELADA\n")
+        dec = pd.DataFrame({"consecutivo_cxc": ["100"], "estado_pago": ["PENDIENTE DE PAGO"]})
+        dec = proc._merge_cxc(dec)
+        self.assertEqual(dec.loc[0, "estado_pago"], "PAGADAS POR OTROS BANCOS")
+
+    def test_pago_realizado_no_se_toca_aunque_el_cxc_este_cancelada(self):
+        """Solo se reclasifican las PENDIENTE DE PAGO; un pago ya confirmado no cambia."""
+        import pandas as pd
+        proc = self._procesador("CONSECUTIVO,ESTADO\n100,CANCELADA\n")
+        dec = pd.DataFrame({"consecutivo_cxc": ["100"], "estado_pago": ["PAGO REALIZADO"]})
+        dec = proc._merge_cxc(dec)
+        self.assertEqual(dec.loc[0, "estado_pago"], "PAGO REALIZADO")
+
+    def test_pendiente_con_cxc_anulada_no_cambia_el_estado_de_pago(self):
+        """ANULADA no es CANCELADA: el pendiente de pago se deja tal como vino de GOBS."""
+        import pandas as pd
+        proc = self._procesador("CONSECUTIVO,ESTADO\n100,ANULADA\n")
+        dec = pd.DataFrame({"consecutivo_cxc": ["100"], "estado_pago": ["PENDIENTE DE PAGO"]})
+        dec = proc._merge_cxc(dec)
+        self.assertEqual(dec.loc[0, "estado_pago"], "PENDIENTE DE PAGO")
+        self.assertEqual(dec.loc[0, "estado_cxc"], "ANULADA")
+
+    def test_sin_fila_en_el_cxc_no_cambia_nada(self):
+        import pandas as pd
+        proc = self._procesador("CONSECUTIVO,ESTADO\n999,CANCELADA\n")
+        dec = pd.DataFrame({"consecutivo_cxc": ["100"], "estado_pago": ["PENDIENTE DE PAGO"]})
+        dec = proc._merge_cxc(dec)
+        self.assertEqual(dec.loc[0, "estado_pago"], "PENDIENTE DE PAGO")
+        self.assertEqual(dec.loc[0, "estado_cxc"], "")
+
+
+class NormalizarPagoTests(TestCase):
+    def test_pago_realizado_es_pagado(self):
+        from etl.services.reporteria import normalizar_pago
+        self.assertEqual(normalizar_pago("PAGO REALIZADO"), "PAGADO")
+        self.assertEqual(normalizar_pago("✓ Pago realizado"), "PAGADO")
+
+    def test_pagadas_por_otros_bancos_es_pagado(self):
+        from etl.services.reporteria import normalizar_pago
+        self.assertEqual(normalizar_pago("PAGADAS POR OTROS BANCOS"), "PAGADO")
+
+    def test_pendiente_de_pago_es_pendiente(self):
+        from etl.services.reporteria import normalizar_pago
+        self.assertEqual(normalizar_pago("PENDIENTE DE PAGO"), "PENDIENTE")
+        self.assertEqual(normalizar_pago(""), "PENDIENTE")
+        self.assertEqual(normalizar_pago(None), "PENDIENTE")
