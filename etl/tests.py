@@ -782,3 +782,32 @@ class NormalizarPagoTests(TestCase):
         self.assertEqual(normalizar_pago("PENDIENTE DE PAGO"), "PENDIENTE")
         self.assertEqual(normalizar_pago(""), "PENDIENTE")
         self.assertEqual(normalizar_pago(None), "PENDIENTE")
+
+
+class QEstadoPagoTests(TestCase):
+    def setUp(self):
+        self.mun = Municipio.objects.create(codigo="QEP", nombre="Municipio Q Estado Pago")
+        self.p = Proceso.objects.create(municipio=self.mun, codigo="CXC_AUTO", nombre="Autorretención")
+        self.u = User.objects.create_user("qep", "qep@example.com", "Qep#2026", municipio=self.mun, rol="ADMIN")
+        ej = Ejecucion.objects.create(proceso=self.p, usuario=self.u)
+        _crear_encabezado(self.p, ej, "1", "PAGO REALIZADO", 100, "Directo SAS")
+        _crear_encabezado(self.p, ej, "2", "PAGADAS POR OTROS BANCOS", 100, "Otro banco SAS")
+        _crear_encabezado(self.p, ej, "3", "PENDIENTE DE PAGO", 100, "Debe SAS")
+        self.client.force_login(self.u)
+
+    def test_pagado_agrupa_pago_realizado_y_pagadas_por_otros_bancos(self):
+        r = self.client.get(reverse("dashboard", args=[self.p.id]), {"estado_pago": "PAGADO"})
+        self.assertContains(r, "Directo SAS")
+        self.assertContains(r, "Otro banco SAS")
+        self.assertNotContains(r, "Debe SAS")
+
+    def test_valor_literal_sigue_buscando_tal_cual(self):
+        r = self.client.get(reverse("dashboard", args=[self.p.id]), {"estado_pago": "OTROS BANCOS"})
+        self.assertContains(r, "Otro banco SAS")
+        self.assertNotContains(r, "Directo SAS")
+        self.assertNotContains(r, "Debe SAS")
+
+    def test_el_enlace_de_reporteria_pagado_usa_el_marcador_de_grupo(self):
+        from etl.services import reporteria
+        ctx = reporteria.calcular(self.mun, {"pago": "PAGADO"})
+        self.assertIn("estado_pago=PAGADO", ctx["explorar"][0]["url"])

@@ -15,6 +15,7 @@ from accounts import permisos
 from .models import Proceso, Ejecucion, InsumoEjecucion, EncabezadoCXC, DetalleCXC
 from .forms import EjecutarProcesoForm
 from .services.motor import MotorETL
+from .services.reporteria import q_estado_pago
 
 
 def _parse_fecha(valor):
@@ -231,7 +232,7 @@ class DashboardView(View):
             if tipo_doc_filtro:
                 qs = qs.filter(encabezado__tipo_documento__iexact=tipo_doc_filtro)
             if estado_pago_filtro:
-                qs = qs.filter(encabezado__estado_pago__icontains=estado_pago_filtro)
+                qs = qs.filter(q_estado_pago(estado_pago_filtro, prefijo="encabezado__"))
             if fecha_desde:
                 qs = qs.filter(encabezado__fecha_cobro__gte=fecha_desde)
             if fecha_hasta:
@@ -305,7 +306,7 @@ class DashboardView(View):
             if tipo_doc_filtro:
                 qs = qs.filter(tipo_documento__iexact=tipo_doc_filtro)
             if estado_pago_filtro:
-                qs = qs.filter(estado_pago__icontains=estado_pago_filtro)
+                qs = qs.filter(q_estado_pago(estado_pago_filtro))
             if fecha_desde:
                 qs = qs.filter(fecha_cobro__gte=fecha_desde)
             if fecha_hasta:
@@ -726,7 +727,7 @@ class ExportarView(View):
             if estado_filtro:
                 qs_enc = qs_enc.filter(estado_cxc__iexact=estado_filtro)
             if estado_pago_filtro:
-                qs_enc = qs_enc.filter(estado_pago__icontains=estado_pago_filtro)
+                qs_enc = qs_enc.filter(q_estado_pago(estado_pago_filtro))
             if caldas_periodo_filtro:
                 qs_enc = qs_enc.filter(datos_extra__periodo=caldas_periodo_filtro)
             if caldas_ano_filtro:
@@ -862,7 +863,7 @@ class ExportarView(View):
             if q_nombre:
                 qs_enc = qs_enc.filter(razon_social__icontains=q_nombre)
             if estado_pago_filtro:
-                qs_enc = qs_enc.filter(estado_pago__icontains=estado_pago_filtro)
+                qs_enc = qs_enc.filter(q_estado_pago(estado_pago_filtro))
             if caldas_periodo_filtro:
                 qs_enc = qs_enc.filter(datos_extra__periodo=caldas_periodo_filtro)
             if caldas_ano_filtro:
@@ -1022,7 +1023,7 @@ class ExportarView(View):
             if tipo_doc_filtro:
                 qs = qs.filter(tipo_documento__iexact=tipo_doc_filtro)
             if estado_pago_filtro:
-                qs = qs.filter(estado_pago__icontains=estado_pago_filtro)
+                qs = qs.filter(q_estado_pago(estado_pago_filtro))
             if fecha_desde:
                 qs = qs.filter(fecha_cobro__gte=fecha_desde)
             if fecha_hasta:
@@ -1087,7 +1088,7 @@ class ExportarView(View):
             if tipo_doc_filtro:
                 qs = qs.filter(encabezado__tipo_documento__iexact=tipo_doc_filtro)
             if estado_pago_filtro:
-                qs = qs.filter(encabezado__estado_pago__icontains=estado_pago_filtro)
+                qs = qs.filter(q_estado_pago(estado_pago_filtro, prefijo="encabezado__"))
             if fecha_desde:
                 qs = qs.filter(encabezado__fecha_cobro__gte=fecha_desde)
             if fecha_hasta:

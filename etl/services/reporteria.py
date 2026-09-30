@@ -36,6 +36,22 @@ def normalizar_pago(estado_pago):
     return "PAGADO" if any(s in e for s in _ESTADOS_PAGADO) else "PENDIENTE"
 
 
+def q_estado_pago(valor, prefijo=""):
+    """Filtro para la columna Estado Pago (encabezado__estado_pago con prefijo="encabezado__").
+    'PAGADO' es el marcador que usa el tablero de Reportería al enlazar al detalle: agrupa
+    todos los estados que normalizar_pago cuenta como pagados (ver _ESTADOS_PAGADO), para
+    que ese enlace muestre lo mismo que cuenta el tablero. Cualquier otro valor (los que
+    vienen del desplegable "Estado Pago", con el texto real de cada municipio) se busca tal
+    cual, como siempre."""
+    campo = f"{prefijo}estado_pago__icontains"
+    if valor.upper() == "PAGADO":
+        q = Q()
+        for estado in _ESTADOS_PAGADO:
+            q |= Q(**{campo: estado})
+        return q
+    return Q(**{campo: valor})
+
+
 def clave_periodo(codigo_municipio, fecha, ano, periodo):
     """Clave ordenable del eje de tiempo: 'YYYY-MM', 'YYYY-Bn' o 'YYYY' (anual)."""
     if codigo_municipio in _POR_BIMESTRE:
@@ -194,7 +210,9 @@ def calcular(municipio, filtros):
     # Enlaces para explorar los registros en la pantalla de detalle existente
     q = {}
     if f["pago"]:
-        q["estado_pago"] = "PAGO REALIZADO" if f["pago"] == "PAGADO" else "PENDIENTE"
+        # "PAGADO" es un marcador de grupo (ver q_estado_pago): agrupa todos los estados
+        # que normalizar_pago cuenta como pagados, no un texto literal de estado_pago.
+        q["estado_pago"] = "PAGADO" if f["pago"] == "PAGADO" else "PENDIENTE"
     if f["cxc"] and f["cxc"] != SIN_CARGAR:
         q["estado"] = f["cxc"]
     if f["doc"]:
