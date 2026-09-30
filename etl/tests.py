@@ -814,8 +814,8 @@ class QEstadoPagoTests(TestCase):
 
 
 class CargueManualOpcionalTests(TestCase):
-    """Copacabana: aunque el proceso use GOBS, se puede seguir subiendo el archivo a mano
-    (para el mismo día, sin esperar la sincronización de GOBS de 24h)."""
+    """Cualquier municipio: aunque el proceso use GOBS, se puede seguir subiendo el archivo
+    a mano (para el mismo día, sin esperar la sincronización de GOBS de 24h)."""
 
     def _proceso(self, codigo_municipio):
         from etl.models import InsumoDefinicion
@@ -827,9 +827,9 @@ class CargueManualOpcionalTests(TestCase):
                                         tipo="CARGUE", extensiones=".xlsx", orden=2)
         return p
 
-    def test_copacabana_muestra_declaraciones_y_actividades_como_opcionales(self):
+    def _asegurar_opcional(self, codigo_municipio):
         from etl.forms import EjecutarProcesoForm
-        p = self._proceso("COPACABANA")
+        p = self._proceso(codigo_municipio)
         form = EjecutarProcesoForm(p)
         self.assertTrue(form.usa_gobs)
         self.assertTrue(form.permite_manual_con_gobs)
@@ -840,14 +840,24 @@ class CargueManualOpcionalTests(TestCase):
         # sigue pudiendo traer de GOBS por fecha
         self.assertIn("fecha_desde", form.fields)
 
-    def test_estrella_no_muestra_cargue_manual_cuando_usa_gobs(self):
+    def test_copacabana_muestra_declaraciones_y_actividades_como_opcionales(self):
+        self._asegurar_opcional("COPACABANA")
+
+    def test_estrella_tambien_muestra_declaraciones_y_actividades_como_opcionales(self):
+        self._asegurar_opcional("ESTRELLA")
+
+    def test_caldas_tambien_muestra_declaraciones_y_actividades_como_opcionales(self):
+        self._asegurar_opcional("CALDAS")
+
+    def test_sin_gobs_el_cargue_sigue_siendo_obligatorio_y_sin_nota_opcional(self):
+        """Un municipio/proceso sin fuente GOBS no cambia: el archivo sigue siendo obligatorio."""
         from etl.forms import EjecutarProcesoForm
-        p = self._proceso("ESTRELLA")
+        p = self._proceso("SIN_GOBS_TEST")  # código que no existe en gobs_pg.FUENTES
         form = EjecutarProcesoForm(p)
-        self.assertTrue(form.usa_gobs)
+        self.assertFalse(form.usa_gobs)
         self.assertFalse(form.permite_manual_con_gobs)
-        self.assertNotIn("declaraciones", form.fields)
-        self.assertNotIn("actividades", form.fields)
+        self.assertTrue(form.fields["declaraciones"].required)
+        self.assertNotIn("opcional", form.fields["declaraciones"].label)
 
     def test_copacabana_con_archivo_manual_reemplaza_gobs_en_esa_ejecucion(self):
         """El motor ya prioriza lo subido a mano sobre GOBS (_completar_desde_gobs);

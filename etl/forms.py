@@ -23,17 +23,14 @@ def _validador_archivo(extensiones):
     return validar
 
 
-# Municipios donde GOBS a veces se queda corto (se actualiza cada 24h) y hace falta poder
-# cargar el mismo día a mano: se deja visible el cargue manual como alternativa opcional,
-# que reemplaza lo que traiga GOBS solo para esa ejecución (ver MotorETL._completar_desde_gobs).
-MUNICIPIOS_CON_CARGUE_MANUAL_OPCIONAL = {"COPACABANA"}
-
-
 class EjecutarProcesoForm(forms.Form):
     def __init__(self, proceso, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.usa_gobs = gobs_pg.fuente_para(proceso.municipio.codigo, proceso.codigo) is not None
-        self.permite_manual_con_gobs = proceso.municipio.codigo in MUNICIPIOS_CON_CARGUE_MANUAL_OPCIONAL
+        # GOBS a veces se queda corto (se actualiza cada 24h): en cualquier municipio que lo use,
+        # se deja visible el cargue manual como alternativa opcional, que reemplaza lo que traiga
+        # GOBS solo para esa ejecución (ver MotorETL._completar_desde_gobs).
+        self.permite_manual_con_gobs = self.usa_gobs
         for insumo in proceso.insumos.filter(tipo="CARGUE").order_by("orden"):
             cubierto_por_gobs = self.usa_gobs and insumo.nombre_campo in CAMPOS_DESDE_GOBS
             if cubierto_por_gobs and not self.permite_manual_con_gobs:
