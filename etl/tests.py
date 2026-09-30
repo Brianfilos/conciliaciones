@@ -811,3 +811,130 @@ class QEstadoPagoTests(TestCase):
         from etl.services import reporteria
         ctx = reporteria.calcular(self.mun, {"pago": "PAGADO"})
         self.assertIn("estado_pago=PAGADO", ctx["explorar"][0]["url"])
+
+
+class CargueManualOpcionalTests(TestCase):
+    """Copacabana: aunque el proceso use GOBS, se puede seguir subiendo el archivo a mano
+    (para el mismo día, sin esperar la sincronización de GOBS de 24h)."""
+
+    def _proceso(self, codigo_municipio):
+        from etl.models import InsumoDefinicion
+        mun = Municipio.objects.create(codigo=codigo_municipio, nombre=f"Municipio {codigo_municipio}")
+        p = Proceso.objects.create(municipio=mun, codigo="CXC_AUTO", nombre="Autorretención")
+        InsumoDefinicion.objects.create(proceso=p, nombre="Declaraciones", nombre_campo="declaraciones",
+                                        tipo="CARGUE", extensiones=".xlsx", orden=1)
+        InsumoDefinicion.objects.create(proceso=p, nombre="Actividades", nombre_campo="actividades",
+                                        tipo="CARGUE", extensiones=".xlsx", orden=2)
+        return p
+
+    def test_copacabana_muestra_declaraciones_y_actividades_como_opcionales(self):
+        from etl.forms import EjecutarProcesoForm
+        p = self._proceso("COPACABANA")
+        form = EjecutarProcesoForm(p)
+        self.assertTrue(form.usa_gobs)
+        self.assertTrue(form.permite_manual_con_gobs)
+        self.assertIn("declaraciones", form.fields)
+        self.assertIn("actividades", form.fields)
+        self.assertFalse(form.fields["declaraciones"].required)
+        self.assertFalse(form.fields["actividades"].required)
+        # sigue pudiendo traer de GOBS por fecha
+        self.assertIn("fecha_desde", form.fields)
+
+    def test_estrella_no_muestra_cargue_manual_cuando_usa_gobs(self):
+        from etl.forms import EjecutarProcesoForm
+        p = self._proceso("ESTRELLA")
+        form = EjecutarProcesoForm(p)
+        self.assertTrue(form.usa_gobs)
+        self.assertFalse(form.permite_manual_con_gobs)
+        self.assertNotIn("declaraciones", form.fields)
+        self.assertNotIn("actividades", form.fields)
+
+    def test_copacabana_con_archivo_manual_reemplaza_gobs_en_esa_ejecucion(self):
+        """El motor ya prioriza lo subido a mano sobre GOBS (_completar_desde_gobs);
+        esta prueba fija ese contrato para que no se rompa sin darnos cuenta."""
+        from etl.services.motor import MotorETL
+        from unittest.mock import patch
+        mun = Municipio.objects.create(codigo="COPACABANA", nombre="Copacabana Motor Test")
+        p = Proceso.objects.create(municipio=mun, codigo="CXC_AUTO", nombre="Autorretención")
+        u = User.objects.create_user("copmot", "copmot@example.com", "Copacabana#2026", municipio=mun, rol="ADMIN")
+        ej = Ejecucion.objects.create(proceso=p, usuario=u)
+        motor = MotorETL(ej)
+        with patch("etl.services.motor.gobs_pg.fuente_para", return_value="fuente-falsa"), \
+             patch("etl.services.motor.gobs_pg.cargar", return_value=({"declaraciones": "DE_GOBS"}, {"declaraciones": 1, "datos_al": None})):
+            resultado = motor._completar_desde_gobs({"declaraciones": "DEL_ARCHIVO_SUBIDO"}, {})
+        self.assertEqual(resultado["declaraciones"], "DEL_ARCHIVO_SUBIDO")
+
+
+class ActualizarGobsCommandTests(TestCase):
+    def setUp(self):
+        self.caldas = Municipio.objects.create(codigo="CALDAS", nombre="Caldas Test")
+        self.p_auto = Proceso.objects.create(municipio=self.caldas, codigo="CXC_AUTO", nombre="Autorretención")
+        self.p_rete = Proceso.objects.create(municipio=self.caldas, codigo="CXC_RETE", nombre="ReteICA")
+
+    def _motor_falso(self, ejecucion):
+        from unittest.mock import MagicMock
+        m = MagicMock()
+
+        def _ejecutar(archivos, filtros):
+            ejecucion.estado = "COMPLETADO"
+            ejecucion.registros_nuevos = 2
+            ejecucion.registros_duplicados = 0
+            ejecucion.save()
+        m.ejecutar.side_effect = _ejecutar
+        return m
+
+    def test_sin_gobs_habilitado_no_hace_nada(self):
+        from unittest.mock import patch
+        from django.core.management import call_command
+        with patch("etl.management.commands.actualizar_gobs.gobs_pg.habilitado", return_value=False):
+            call_command("actualizar_gobs")
+        self.assertEqual(Ejecucion.objects.count(), 0)
+
+    def test_corre_solo_los_procesos_con_fuente_gobs_activa(self):
+        from unittest.mock import patch
+        from django.core.management import call_command
+        with patch("etl.management.commands.actualizar_gobs.gobs_pg.habilitado", return_value=True), \
+             patch("etl.management.commands.actualizar_gobs.gobs_pg.fuente_para",
+                   side_effect=lambda cod, proc: "fuente-falsa" if proc == "CXC_AUTO" else None), \
+             patch("etl.management.commands.actualizar_gobs.MotorETL", side_effect=self._motor_falso) as MockMotor:
+            call_command("actualizar_gobs", municipio="CALDAS")
+
+        self.assertEqual(MockMotor.call_count, 1)  # solo CXC_AUTO tenía fuente
+        ejecuciones = Ejecucion.objects.filter(proceso__municipio=self.caldas)
+        self.assertEqual(ejecuciones.count(), 1)
+        ej = ejecuciones.first()
+        self.assertEqual(ej.proceso.codigo, "CXC_AUTO")
+        self.assertTrue(ej.automatico)
+        self.assertEqual(ej.usuario.username, "bot_gobs")
+        bot_user = User.objects.get(username="bot_gobs")
+        self.assertFalse(bot_user.is_active)
+        self.assertFalse(bot_user.has_usable_password())
+
+    def test_omite_estrella_y_copacabana_por_defecto(self):
+        """Esos dos ya se refrescan con actualizar_sofinet; no deben correr dos veces."""
+        from etl.management.commands.actualizar_gobs import MUNICIPIOS_SIN_BOT_PROPIO
+        self.assertNotIn("ESTRELLA", MUNICIPIOS_SIN_BOT_PROPIO)
+        self.assertNotIn("COPACABANA", MUNICIPIOS_SIN_BOT_PROPIO)
+
+    @override_settings(SOFINET_ALERTA_EMAIL="admin@example.com")
+    def test_fallo_no_toca_datos_y_avisa(self):
+        from unittest.mock import MagicMock, patch
+        from django.core.management import call_command
+
+        def _motor_con_error(ejecucion):
+            m = MagicMock()
+
+            def _ejecutar(archivos, filtros):
+                ejecucion.estado = "ERROR"
+                ejecucion.error_log = "boom"
+                ejecucion.save()
+            m.ejecutar.side_effect = _ejecutar
+            return m
+
+        with patch("etl.management.commands.actualizar_gobs.gobs_pg.habilitado", return_value=True), \
+             patch("etl.management.commands.actualizar_gobs.gobs_pg.fuente_para", return_value="fuente-falsa"), \
+             patch("etl.management.commands.actualizar_gobs.MotorETL", side_effect=_motor_con_error):
+            call_command("actualizar_gobs", municipio="CALDAS")
+
+        self.assertEqual(len(mail.outbox), 2)  # uno por cada proceso (CXC_AUTO y CXC_RETE)
+        self.assertIn("CALDAS", mail.outbox[0].subject)

@@ -26,7 +26,13 @@
           <div class="alert alert-info small">
             <i class="bi bi-database-check me-1"></i>
             Las declaraciones y actividades se leen directamente de <strong>GOBS</strong>
-            (se actualizan cada 24 horas). Solo debes subir el archivo de CXC.
+            (se actualizan cada 24 horas).
+            {% if form.permite_manual_con_gobs %}
+            Si necesitas datos del mismo día, puedes subir el archivo manual más abajo: reemplaza
+            lo que traiga GOBS solo en esta ejecución.
+            {% else %}
+            Solo debes subir el archivo de CXC.
+            {% endif %}
           </div>
           {% endif %}
           {% for field in form %}

@@ -196,5 +196,12 @@ SOFINET_ESTRELLA_PASS = config('SOFINET_ESTRELLA_PASS', default='')
 SOFINET_COPACABANA_HOST = config('SOFINET_COPACABANA_HOST', default='')
 SOFINET_COPACABANA_USER = config('SOFINET_COPACABANA_USER', default='')
 SOFINET_COPACABANA_PASS = config('SOFINET_COPACABANA_PASS', default='')
-# A dónde avisar si la descarga o la carga automática fallan (vacío = solo queda en el log)
+# A dónde avisar si la descarga o la carga automática fallan (vacío = solo queda en el log).
+# La usan tanto actualizar_sofinet como actualizar_gobs.
 SOFINET_ALERTA_EMAIL = config('SOFINET_ALERTA_EMAIL', default='')
+
+# ── Refresco nocturno de GOBS para Caldas, Envigado y Sabaneta ───────────────
+# (Estrella y Copacabana ya se refrescan con actualizar_sofinet, que trae todo el
+# histórico junto con el CSV; duplicarlos en actualizar_gobs sería trabajo de más.)
+# Cuántos días atrás repasar cada noche (mismo criterio que ya usa verificar_gobs).
+GOBS_REFRESH_DIAS = config('GOBS_REFRESH_DIAS', default=90, cast=int)
