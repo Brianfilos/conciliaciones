@@ -1246,3 +1246,54 @@ class ExportarCompletoViewTests(TestCase):
             r["Content-Type"],
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         self.assertIn("EXPVISTA_CXC_AUTO_completo.xlsx", r["Content-Disposition"])
+
+
+class UnicosDeclareYPagueEsAnualTests(TestCase):
+    """Declare y Pague es anual: dos reenvíos en meses distintos del mismo año gravable
+    deben contarse como UNA sola vigencia, no dos (a diferencia de Auto/Rete)."""
+
+    def setUp(self):
+        self.mun = Municipio.objects.create(codigo="DYPANUAL", nombre="Municipio Declare y Pague")
+        self.p = Proceso.objects.create(municipio=self.mun, codigo="DECLAREYPAGUE", nombre="Declare y Pague")
+        u = User.objects.create_user("dypanual", "dypanual@example.com", "Dyp#2026", municipio=self.mun)
+        self.ej = Ejecucion.objects.create(proceso=self.p, usuario=u)
+
+    def _crear(self, consec, fecha, estado, total=100):
+        from datetime import date as _date
+        return EncabezadoCXC.objects.create(
+            proceso=self.p, ejecucion=self.ej, consecutivo_cxc=consec, consecutivo_original=consec,
+            numero_documento="900444555", fecha_cobro=_date.fromisoformat(fecha), estado_pago=estado,
+            total_a_pagar=total)
+
+    def test_dos_meses_distintos_mismo_ano_gravable_es_una_sola_vigencia(self):
+        from etl.services import unicos
+        marzo = self._crear("1", "2024-03-10", "PENDIENTE DE PAGO")
+        agosto = self._crear("2", "2024-08-20", "PAGO REALIZADO")  # reenvío posterior, pagado: gana
+        ids_u, ids_e, dup = unicos.calcular(self.p)
+        self.assertEqual(ids_u, [agosto.id])
+        self.assertEqual(ids_e, [marzo.id])
+        self.assertEqual(dup[agosto.id], 1)
+
+    def test_distinto_ano_gravable_si_se_cuenta_aparte(self):
+        from etl.services import unicos
+        e2024 = self._crear("1", "2024-03-10", "PENDIENTE DE PAGO")
+        e2025 = self._crear("2", "2025-03-10", "PENDIENTE DE PAGO")
+        ids_u, ids_e, _ = unicos.calcular(self.p)
+        self.assertEqual(set(ids_u), {e2024.id, e2025.id})
+        self.assertEqual(ids_e, [])
+
+    def test_autorretencion_en_el_mismo_municipio_sigue_agrupando_por_mes(self):
+        """Confirma que el cambio es específico de Declare y Pague, no global."""
+        from etl.services import unicos
+        p_auto = Proceso.objects.create(municipio=self.mun, codigo="CXC_AUTO", nombre="Autorretención")
+        from datetime import date
+        marzo = EncabezadoCXC.objects.create(proceso=p_auto, ejecucion=self.ej, consecutivo_cxc="10",
+            consecutivo_original="10", numero_documento="900444555", fecha_cobro=date(2024, 3, 10),
+            estado_pago="PENDIENTE DE PAGO", total_a_pagar=100)
+        agosto = EncabezadoCXC.objects.create(proceso=p_auto, ejecucion=self.ej, consecutivo_cxc="11",
+            consecutivo_original="11", numero_documento="900444555", fecha_cobro=date(2024, 8, 20),
+            estado_pago="PAGO REALIZADO", total_a_pagar=100)
+        ids_u, ids_e, _ = unicos.calcular(p_auto)
+        # meses distintos: siguen siendo dos vigencias separadas para Autorretención
+        self.assertEqual(set(ids_u), {marzo.id, agosto.id})
+        self.assertEqual(ids_e, [])
