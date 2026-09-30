@@ -47,6 +47,19 @@
 .rp-explore-menu a { display: block; padding: 7px 10px; border-radius: 8px; color: var(--ink); text-decoration: none; font-size: .85rem; }
 .rp-explore-menu a:hover { background: var(--wash); }
 
+/* Resumen en una frase: acento de color del municipio, texto siempre oscuro sobre
+   blanco (algunos municipios tienen un color primario muy claro/saturado — un fondo
+   sólido con texto blanco fallaría el contraste en esos casos). */
+.rp-headline { background: var(--surface-card, #fff); border: 1px solid var(--border-subtle); border-left: 5px solid var(--color-primario, #1B3A6B); border-radius: var(--r-md, 12px); padding: 14px 20px; margin-bottom: 16px; box-shadow: var(--shadow-xs); }
+.rp-headline[hidden] { display: none; }
+.rp-headline-main { font-size: 1.05rem; font-weight: 600; line-height: 1.4; color: var(--ink); }
+.rp-headline-extra { font-size: .83rem; margin-top: 6px; color: var(--ink-2); display: flex; align-items: center; gap: 6px; }
+
+/* Separador entre lo que importa al negocio (arriba) y el detalle técnico del
+   sistema (abajo): mismo grupo visual, pero claramente en segundo plano. */
+.rp-section-label { font-size: .74rem; text-transform: uppercase; letter-spacing: .07em; color: var(--ink-3); font-weight: 700; margin: 2px 0 -6px; padding-top: 14px; border-top: 1px solid var(--grid); }
+.rp-section-label[hidden] { display: none; }
+
 /* KPI */
 .rp-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-bottom: 16px; }
 .rp-kpi { background: var(--surface-card, #fff); border: 1px solid var(--border-subtle); border-radius: var(--r-md, 12px); padding: 16px 18px; box-shadow: var(--shadow-xs); text-align: left; font: inherit; color: inherit; width: 100%; }

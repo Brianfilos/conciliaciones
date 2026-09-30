@@ -29,6 +29,9 @@
     </div>
   </div>
 
+  <!-- Resumen en una frase: lo primero que debe leerse -->
+  <div class="rp-headline" id="rp-headline" hidden></div>
+
   <!-- Buscador de contribuyente: por nombre, razón social o NIT -->
   <div class="rp-search" id="rp-search">
     <i class="bi bi-search" aria-hidden="true"></i>
@@ -61,6 +64,23 @@
       <p class="rp-note" id="tiempo-note"></p>
     </article>
 
+    <article class="rp-card" id="card-procesos" hidden>
+      <header class="rp-card-h">
+        <div><h2>Por proceso</h2><p class="rp-hint">Pagadas y pendientes de cada proceso.</p></div>
+        <div class="rp-card-tools" id="procesos-tools"></div>
+      </header>
+      <div class="rp-body" id="procesos-body"></div>
+    </article>
+
+    <article class="rp-card" id="card-unicos" hidden>
+      <header class="rp-card-h">
+        <div><h2>Declaraciones únicas</h2><p class="rp-hint">Una por vigencia (documento + período): si hay varias copias, cuenta la pagada más reciente, o la última presentada si ninguna pagó.</p></div>
+      </header>
+      <div class="rp-body" id="unicos-body"></div>
+    </article>
+
+    <h3 class="rp-section-label rp-wide" id="rp-label-detalle" hidden>Detalle del sistema</h3>
+
     <article class="rp-card" id="card-cxc" hidden>
       <header class="rp-card-h">
         <div><h2>Estado en el sistema de información</h2><p class="rp-hint">Según el archivo CSV de CXC cargado.</p></div>
@@ -75,21 +95,6 @@
       </header>
       <div class="rp-body" id="cruce-body"></div>
       <p class="rp-note" id="cruce-note"></p>
-    </article>
-
-    <article class="rp-card" id="card-procesos" hidden>
-      <header class="rp-card-h">
-        <div><h2>Por proceso</h2><p class="rp-hint">Pagadas y pendientes de cada proceso.</p></div>
-        <div class="rp-card-tools" id="procesos-tools"></div>
-      </header>
-      <div class="rp-body" id="procesos-body"></div>
-    </article>
-
-    <article class="rp-card" id="card-unicos" hidden>
-      <header class="rp-card-h">
-        <div><h2>Declaraciones únicas</h2><p class="rp-hint">Una por vigencia (documento + período): si hay varias copias, cuenta la pagada más reciente, o la última presentada si ninguna pagó.</p></div>
-      </header>
-      <div class="rp-body" id="unicos-body"></div>
     </article>
 
     <article class="rp-card" id="card-top">

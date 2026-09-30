@@ -260,6 +260,23 @@
     if (o.clic) return el('button', { type: 'button', class: 'rp-kpi' + (o.hero ? ' rp-kpi-hero' : ''), 'aria-pressed': String(!!o.on), onclick: o.clic }, cuerpo);
     return el('div', { class: 'rp-kpi' + (o.hero ? ' rp-kpi-hero' : '') }, cuerpo);
   }
+  /* ── Resumen en una frase ───────────────────────────────────── */
+  function renderHeadline() {
+    const k = datos.kpi, el_ = $('rp-headline');
+    if (!k.total) { el_.hidden = true; return; }
+    el_.hidden = false;
+    const pctPagado = Math.round(100 * k.pagadas / k.total);
+    const frase = `${pctPagado}% de las declaraciones de ${datos.municipio.nombre} están pagadas`
+      + (k.pendientes ? `; quedan ${money(k.pendientes_valor)} por cobrar en ${nf.format(k.pendientes)} declaraciones pendientes.` : '.');
+    const kids = [el('div', { class: 'rp-headline-main', text: frase })];
+    if (k.sin_cargar_pagadas) {
+      kids.push(el('div', { class: 'rp-headline-extra' },
+        el('i', { class: 'bi bi-info-circle', 'aria-hidden': 'true' }),
+        ` ${nf.format(k.sin_cargar_pagadas)} de ellas ya se pagaron pero todavía no aparecen en el sistema — conviene revisarlas.`));
+    }
+    clear(el_).append(...kids);
+  }
+
   function renderKpis() {
     const k = datos.kpi, csv = datos.municipio.tiene_csv;
     const cont = clear($('rp-kpis'));
@@ -331,6 +348,7 @@
   function renderCxc() {
     const card = $('card-cxc'), csv = datos.municipio.tiene_csv;
     card.hidden = !csv;
+    $('rp-label-detalle').hidden = !csv;
     if (!csv) return;
     const rows = datos.cxc, total = rows.reduce((s, r) => s + r.n, 0), body = $('cxc-body');
     herramientas($('cxc-tools'), [{ t: st.tablas.cxc ? 'Ver gráfico' : 'Ver tabla', on: !!st.tablas.cxc, fn: () => { st.tablas.cxc = !st.tablas.cxc; renderCxc(); } }]);
@@ -470,6 +488,7 @@
   function render() {
     renderBusqueda();
     renderFiltros();
+    renderHeadline();
     renderKpis();
     renderDetalle();
     renderTiempo();
