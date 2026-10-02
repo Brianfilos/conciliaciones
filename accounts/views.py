@@ -43,6 +43,9 @@ class LoginView(View):
                 correo.limpiar_temporal(usuario)
                 usuario.save(update_fields=['password_temporal', 'password_temporal_expira'])
             login(request, usuario)
+            if usuario.municipio_id:
+                from etl.services import auto_refresh
+                auto_refresh.disparar_para_municipio(usuario.municipio.codigo)
             next_url = request.GET.get('next', '')
             if not url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()},
                                                    require_https=request.is_secure()):

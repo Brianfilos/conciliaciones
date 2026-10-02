@@ -205,3 +205,11 @@ SOFINET_ALERTA_EMAIL = config('SOFINET_ALERTA_EMAIL', default='')
 # histórico junto con el CSV; duplicarlos en actualizar_gobs sería trabajo de más.)
 # Cuántos días atrás repasar cada noche (mismo criterio que ya usa verificar_gobs).
 GOBS_REFRESH_DIAS = config('GOBS_REFRESH_DIAS', default=90, cast=int)
+
+# ── Refresco al iniciar sesión (respaldo del cron de las 5am) ────────────────
+# Al loguearse, se dispara en segundo plano la misma actualización automática del
+# municipio de quien entró (no bloquea el login). Sirve de respaldo si el cron de
+# madrugada no corrió; LOGIN_REFRESH_COOLDOWN_MIN evita relanzarla en cada login
+# si ya se hizo hace poco (varios usuarios del mismo municipio entrando seguido).
+LOGIN_REFRESH_ENABLED = config('LOGIN_REFRESH_ENABLED', default=True, cast=bool)
+LOGIN_REFRESH_COOLDOWN_MIN = config('LOGIN_REFRESH_COOLDOWN_MIN', default=30, cast=int)

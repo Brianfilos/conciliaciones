@@ -1357,3 +1357,82 @@ class UnicosDeclareYPagueEsAnualTests(TestCase):
         # meses distintos: siguen siendo dos vigencias separadas para Autorretención
         self.assertEqual(set(ids_u), {marzo.id, agosto.id})
         self.assertEqual(ids_e, [])
+
+
+class AutoRefreshLoginTests(TestCase):
+    """Respaldo del cron de las 5am: al loguearse, se dispara en segundo plano la
+    actualización del municipio de quien entró — sin bloquear el login ni repetirse si
+    ya se refrescó hace poco (ver etl/services/auto_refresh.py)."""
+
+    def setUp(self):
+        self.mun_caldas = Municipio.objects.create(codigo="CALDAS", nombre="Caldas")
+        self.mun_estrella = Municipio.objects.create(codigo="ESTRELLA", nombre="La Estrella")
+        self.p = Proceso.objects.create(municipio=self.mun_caldas, codigo="CXC_AUTO", nombre="Autorretención")
+
+    @override_settings(LOGIN_REFRESH_ENABLED=True, LOGIN_REFRESH_COOLDOWN_MIN=30)
+    def test_dispara_actualizar_gobs_para_municipio_sin_bot_propio(self):
+        from unittest.mock import patch
+        from etl.services import auto_refresh
+        with patch("etl.services.auto_refresh.subprocess.Popen") as mock_popen:
+            auto_refresh.disparar_para_municipio("CALDAS")
+        self.assertEqual(mock_popen.call_count, 1)
+        args = mock_popen.call_args[0][0]
+        self.assertIn("actualizar_gobs", args)
+        self.assertEqual(args[-2:], ["--municipio", "CALDAS"])
+
+    @override_settings(LOGIN_REFRESH_ENABLED=True, LOGIN_REFRESH_COOLDOWN_MIN=30)
+    def test_dispara_actualizar_sofinet_para_estrella_y_copacabana(self):
+        from unittest.mock import patch
+        from etl.services import auto_refresh
+        with patch("etl.services.auto_refresh.subprocess.Popen") as mock_popen:
+            auto_refresh.disparar_para_municipio("ESTRELLA")
+        args = mock_popen.call_args[0][0]
+        self.assertIn("actualizar_sofinet", args)
+
+    @override_settings(LOGIN_REFRESH_ENABLED=True, LOGIN_REFRESH_COOLDOWN_MIN=30)
+    def test_no_repite_si_ya_se_actualizo_hace_poco(self):
+        from unittest.mock import patch
+        from etl.services import auto_refresh
+        u = get_user_model().objects.create_user("autorefresh1", "ar1@example.com", "Ar#2026", municipio=self.mun_caldas)
+        Ejecucion.objects.create(proceso=self.p, usuario=u, automatico=True)
+        with patch("etl.services.auto_refresh.subprocess.Popen") as mock_popen:
+            auto_refresh.disparar_para_municipio("CALDAS")
+        mock_popen.assert_not_called()
+
+    @override_settings(LOGIN_REFRESH_ENABLED=True, LOGIN_REFRESH_COOLDOWN_MIN=30)
+    def test_ejecucion_manual_vieja_no_cuenta_para_el_cooldown(self):
+        """Solo las ejecuciones automáticas (cron/login) cuentan para el cooldown — si lo
+        único reciente fue una carga manual, igual se dispara el respaldo."""
+        from unittest.mock import patch
+        from etl.services import auto_refresh
+        u = get_user_model().objects.create_user("autorefresh2", "ar2@example.com", "Ar#2026", municipio=self.mun_caldas)
+        Ejecucion.objects.create(proceso=self.p, usuario=u, automatico=False)
+        with patch("etl.services.auto_refresh.subprocess.Popen") as mock_popen:
+            auto_refresh.disparar_para_municipio("CALDAS")
+        mock_popen.assert_called_once()
+
+    @override_settings(LOGIN_REFRESH_ENABLED=False)
+    def test_no_dispara_nada_si_esta_desactivado(self):
+        from unittest.mock import patch
+        from etl.services import auto_refresh
+        with patch("etl.services.auto_refresh.subprocess.Popen") as mock_popen:
+            auto_refresh.disparar_para_municipio("CALDAS")
+        mock_popen.assert_not_called()
+
+    @override_settings(LOGIN_REFRESH_ENABLED=True, LOGIN_REFRESH_COOLDOWN_MIN=30)
+    def test_un_fallo_al_lanzar_el_proceso_no_se_propaga(self):
+        """Un error acá (p.ej. permisos, disco lleno) nunca debe romper el login."""
+        from unittest.mock import patch
+        from etl.services import auto_refresh
+        with patch("etl.services.auto_refresh.subprocess.Popen", side_effect=OSError("sin permiso")):
+            auto_refresh.disparar_para_municipio("CALDAS")  # no debe lanzar
+
+    @override_settings(LOGIN_REFRESH_ENABLED=True, LOGIN_REFRESH_COOLDOWN_MIN=30)
+    def test_login_real_dispara_el_refresco_sin_romper_si_falla(self):
+        """El login en sí: dispara el refresco de fondo y de todas formas deja entrar al
+        usuario, aunque el disparo falle."""
+        from unittest.mock import patch
+        u = get_user_model().objects.create_user("autorefresh3", "ar3@example.com", "Ar#2026", municipio=self.mun_caldas)
+        with patch("etl.services.auto_refresh.subprocess.Popen", side_effect=OSError("sin permiso")):
+            resp = self.client.post(reverse("login"), {"username": "autorefresh3", "password": "Ar#2026"})
+        self.assertEqual(resp.status_code, 302)  # login exitoso pese al fallo del disparo
