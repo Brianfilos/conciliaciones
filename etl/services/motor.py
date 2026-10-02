@@ -64,10 +64,18 @@ class MotorETL:
             raise NotImplementedError(f"No hay procesador para municipio: {cod}")
 
     def _guardar(self, df_enc, df_det):
-        def sv(v):
+        # Límite real de cada CharField del encabezado, para recortar valores sucios de la
+        # fuente (p. ej. GOBS trayendo un nombre en una columna que debía ser un documento)
+        # en vez de que MySQL tumbe todo el lote con "Datos demasiado largos para la columna".
+        max_len = {f.name: f.max_length for f in EncabezadoCXC._meta.get_fields()
+                   if getattr(f, "max_length", None)}
+
+        def sv(v, campo=None):
             if v is None or (isinstance(v, float) and pd.isna(v)):
                 return ""
-            return str(v).strip()
+            s = str(v).strip()
+            limite = max_len.get(campo)
+            return s[:limite] if limite else s
 
         def sd(v):
             if v is None or v is pd.NaT:
@@ -140,20 +148,20 @@ class MotorETL:
 
                 # Campos comunes del encabezado
                 campos = dict(
-                    consecutivo_original = sv(row.get("consecutivo_original", "")),
-                    tipo_documento       = sv(row.get("tipo_documento", "")),
-                    numero_documento     = sv(row.get("numero_documento", "")),
-                    primer_nombre        = sv(row.get("primer_nombre", "")),
-                    segundo_nombre       = sv(row.get("segundo_nombre", "")),
-                    primer_apellido      = sv(row.get("primer_apellido", "")),
-                    segundo_apellido     = sv(row.get("segundo_apellido", "")),
-                    razon_social         = sv(row.get("razon_social", "")),
+                    consecutivo_original = sv(row.get("consecutivo_original", ""), "consecutivo_original"),
+                    tipo_documento       = sv(row.get("tipo_documento", ""), "tipo_documento"),
+                    numero_documento     = sv(row.get("numero_documento", ""), "numero_documento"),
+                    primer_nombre        = sv(row.get("primer_nombre", ""), "primer_nombre"),
+                    segundo_nombre       = sv(row.get("segundo_nombre", ""), "segundo_nombre"),
+                    primer_apellido      = sv(row.get("primer_apellido", ""), "primer_apellido"),
+                    segundo_apellido     = sv(row.get("segundo_apellido", ""), "segundo_apellido"),
+                    razon_social         = sv(row.get("razon_social", ""), "razon_social"),
                     fecha_cobro          = sd(row.get("fecha_cobro")),
                     fecha_vencimiento    = sd(row.get("fecha_vencimiento")),
                     descripcion          = sv(row.get("descripcion", "")),
                     total_a_pagar        = sn(row.get("total_a_pagar")),
-                    estado_pago          = sv(row.get("estado_pago", "")),
-                    estado_cxc           = sv(row.get("estado_cxc", "")),
+                    estado_pago          = sv(row.get("estado_pago", ""), "estado_pago"),
+                    estado_cxc           = sv(row.get("estado_cxc", ""), "estado_cxc"),
                     datos_extra          = extra,
                 )
 

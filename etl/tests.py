@@ -874,6 +874,42 @@ class CargueManualOpcionalTests(TestCase):
             resultado = motor._completar_desde_gobs({"declaraciones": "DEL_ARCHIVO_SUBIDO"}, {})
         self.assertEqual(resultado["declaraciones"], "DEL_ARCHIVO_SUBIDO")
 
+    def test_valor_mas_largo_que_el_campo_se_recorta_en_vez_de_romper_el_lote(self):
+        """Bug real en producción: GOBS trajo un nombre completo en la columna de
+        documento de Envigado ('LINA MARIA GARCIA GRAJALES', 26 caracteres) y MySQL tumbó
+        todo el lote con 'Datos demasiado largos para la columna numero_documento'
+        (max_length=20). _guardar() debe recortar a ese límite en vez de dejar que
+        cualquier fuente sucia (GOBS o un Excel) reviente toda la ejecución."""
+        import pandas as pd
+        from unittest.mock import MagicMock, patch
+        from etl.services.motor import MotorETL
+        mun = Municipio.objects.create(codigo="MOTORTRUNC", nombre="Motor Truncar Test")
+        p = Proceso.objects.create(municipio=mun, codigo="CXC_AUTO", nombre="Autorretención")
+        u = User.objects.create_user("motortrunc", "motortrunc@example.com", "Trunc#2026", municipio=mun)
+        ej = Ejecucion.objects.create(proceso=p, usuario=u)
+
+        df_enc = pd.DataFrame([{
+            "consecutivo_cxc": "1", "consecutivo_original": "1",
+            "numero_documento": "LINA MARIA GARCIA GRAJALES",  # 26 caracteres, el campo acepta 20
+            "razon_social": "LINA MARIA GARCIA GRAJALES",
+            "fecha_cobro": "2026-05-01", "total_a_pagar": 100, "estado_pago": "PENDIENTE",
+        }])
+        df_det = pd.DataFrame(columns=["consecutivo_cxc", "codigo_concepto", "centro_costo",
+                                       "cantidad", "valor_unitario", "valor_total"])
+        processor_falso = MagicMock()
+        processor_falso.procesar.return_value = (df_enc, df_det)
+
+        motor = MotorETL(ej)
+        with patch.object(motor, "_get_processor", return_value=processor_falso), \
+             patch.object(motor, "_completar_desde_gobs", side_effect=lambda archivos, filtros: archivos):
+            motor.ejecutar({}, {})
+
+        ej.refresh_from_db()
+        self.assertEqual(ej.estado, "COMPLETADO")
+        enc = EncabezadoCXC.objects.get(proceso=p, consecutivo_cxc="1")
+        self.assertEqual(enc.numero_documento, "LINA MARIA GARCIA GR")  # recortado a 20
+        self.assertEqual(len(enc.numero_documento), 20)
+
 
 class ActualizarGobsCommandTests(TestCase):
     def setUp(self):
