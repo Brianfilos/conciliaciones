@@ -133,9 +133,14 @@ class ProcesadorEnvigado:
                     "razon_social", "fecha_cobro", "fecha_vencimiento",
                     "descripcion", "total_a_pagar", "estado_pago", "estado_cxc"]
 
-        # Map NIT y Nombre
-        dec["numero_documento"] = dec[self._col(dec, "Cedula/NIT propietario")].astype(str)             if self._col(dec, "Cedula/NIT propietario") else ""
-        dec["razon_social"]     = dec.get("Nombre productor", "").fillna("").astype(str)
+        # Map NIT y Nombre — GOBS cambió esta vista: ya no trae "Cedula/NIT propietario" ni
+        # "Nombre productor", ahora vienen como "25. No documento de identidad" y
+        # "24. Nombre del Contribuyente o Representante Legal". Se prueban ambos nombres
+        # (el nuevo primero) para no romper si algún Excel viejo todavía usa el formato anterior.
+        col_doc = self._col(dec, "25. No documento de identidad", "Cedula/NIT propietario")
+        col_nom = self._col(dec, "24. Nombre del Contribuyente", "Nombre productor")
+        dec["numero_documento"] = dec[col_doc].astype(str) if col_doc else ""
+        dec["razon_social"]     = dec[col_nom].fillna("").astype(str) if col_nom else ""
 
         df_enc = dec[[c for c in enc_cols if c in dec.columns]].copy()
 
@@ -223,11 +228,12 @@ class ProcesadorEnvigado:
         consec_col = "Consecutivo 1" if "Consecutivo 1" in dec.columns else "Consecutivo"
         dec["consecutivo_cxc"]      = dec[consec_col].astype(str).str.strip()
         dec["consecutivo_original"] = dec["consecutivo_cxc"]
-        col_ced  = self._col(dec, "Cedula/NIT propietario")
+        col_ced  = self._col(dec, "25. No documento de identidad", "Cedula/NIT propietario")
+        col_nom  = self._col(dec, "24. Nombre del Contribuyente", "Nombre productor")
         col_pres = self._col(dec, "Fecha de presentacion")
         col_tot  = self._col(dec, "23. Total a pagar")
         dec["numero_documento"]     = dec[col_ced].astype(str) if col_ced else ""
-        dec["razon_social"]         = dec.get("Nombre productor", "").fillna("").astype(str)
+        dec["razon_social"]         = dec[col_nom].fillna("").astype(str) if col_nom else ""
         dec["fecha_cobro"]          = self._fecha(dec.get("Fecha Pago"))
         dec["fecha_vencimiento"]    = self._fecha(dec.get(col_pres))
         dec["total_a_pagar"]        = dec.get(col_tot)

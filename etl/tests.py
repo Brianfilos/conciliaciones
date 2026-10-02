@@ -1146,6 +1146,52 @@ class ReporteriaDeduplicaTests(TestCase):
         self.assertEqual(k["en_sistema"], k["total_unico"])
 
 
+class ProcesadorEnvigadoColumnasGobsTests(TestCase):
+    """GOBS cambió la vista de Envigado: 'Cedula/NIT propietario'/'Nombre productor'
+    desaparecieron y ahora el NIT/nombre del contribuyente vienen en
+    '25. No documento de identidad'/'24. Nombre del Contribuyente o Representante Legal'.
+    Esto rompía _rete() con un AttributeError ('str' object has no attribute 'fillna')
+    porque dec.get(...) caía en el valor por defecto "" al no encontrar la columna vieja.
+    Se prueban ambos esquemas de columnas (el nuevo de GOBS y el viejo de Excel) para no
+    volver a romper ninguno de los dos."""
+
+    def setUp(self):
+        self.mun = Municipio.objects.create(codigo="ENVCOLGOBS", nombre="Envigado Columnas Test")
+
+    def _fila_base(self, **extra):
+        fila = {
+            "Consecutivo 1": "900", "Fecha de presentacion": "2026-05-10",
+            "Fecha Pago": "2026-05-15", "Estado Pago": "Pago realizado",
+            "1. Periodo declarado": "Bimestre 3", "1.1 Año": 2026,
+            "23. Total a pagar": 50000,
+        }
+        fila.update(extra)
+        return fila
+
+    def test_esquema_nuevo_de_gobs(self):
+        import pandas as pd
+        from etl.services.envigado import ProcesadorEnvigado
+        dec = pd.DataFrame([self._fila_base(**{
+            "25. No documento de identidad": "900123456",
+            "24. Nombre del Contribuyente o Representante Legal": "Empresa Nueva SAS",
+        })])
+        proc = ProcesadorEnvigado("CXC_RETE", {"declaraciones": dec}, self.mun)
+        df_enc, _ = proc._rete()
+        self.assertEqual(df_enc.iloc[0]["numero_documento"], "900123456")
+        self.assertEqual(df_enc.iloc[0]["razon_social"], "Empresa Nueva SAS")
+
+    def test_esquema_viejo_de_excel_sigue_funcionando(self):
+        import pandas as pd
+        from etl.services.envigado import ProcesadorEnvigado
+        dec = pd.DataFrame([self._fila_base(**{
+            "Cedula/NIT propietario": "900654321", "Nombre productor": "Empresa Vieja Ltda",
+        })])
+        proc = ProcesadorEnvigado("CXC_RETE", {"declaraciones": dec}, self.mun)
+        df_enc, _ = proc._rete()
+        self.assertEqual(df_enc.iloc[0]["numero_documento"], "900654321")
+        self.assertEqual(df_enc.iloc[0]["razon_social"], "Empresa Vieja Ltda")
+
+
 class ExportCompletoServiceTests(TestCase):
     def setUp(self):
         from datetime import date
