@@ -37,6 +37,18 @@ PROCESOS = [
     },
 ]
 
+# Régimen Simple (RST): solo La Estrella. Fuente: "Informe Detallado Pagos (giros) ICAC"
+# de DIAN (GIROS ICAC TERRITORIALES - DETALLADO.xlsx). No usa GOBS ni CXC CSV propio —
+# cada carga genera cuentas por cobrar nuevas, serie 908 (ver estrella.py:_regimen_simple).
+PROCESO_REGIMEN_SIMPLE = {
+    "codigo": "REGIMEN_SIMPLE", "nombre": "Régimen Simple (RST)",
+    "descripcion": "Proceso ICA Régimen Simple, a partir del informe de giros de DIAN", "orden": 4,
+    "insumos": [
+        {"nombre": "Informe Detallado Pagos (giros) ICAC — DIAN", "nombre_campo": "declaraciones",
+         "extensiones": ".xlsx", "orden": 1},
+    ],
+}
+
 
 class Command(BaseCommand):
     help = "Inicializa municipios y procesos base en la base de datos"
@@ -64,6 +76,22 @@ class Command(BaseCommand):
                         defaults={**idata, "tipo": "CARGUE", "requerido": True}
                     )
                 self.stdout.write(f"  Proceso: {proceso}")
+
+        # Régimen Simple — solo Estrella
+        try:
+            estrella = Municipio.objects.get(codigo="ESTRELLA")
+            pdata = dict(PROCESO_REGIMEN_SIMPLE)
+            insumos = pdata.pop("insumos")
+            proceso, _ = Proceso.objects.update_or_create(
+                municipio=estrella, codigo=pdata["codigo"], defaults={**pdata, "activo": True})
+            for idata in insumos:
+                InsumoDefinicion.objects.update_or_create(
+                    proceso=proceso, nombre_campo=idata["nombre_campo"],
+                    defaults={**idata, "tipo": "CARGUE", "requerido": True})
+            self.stdout.write(f"  Proceso: {proceso}")
+        except Municipio.DoesNotExist:
+            pass
+
         # Envigado — procesos sin insumo cxc_csv
         envigado_procesos = [
             {

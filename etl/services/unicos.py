@@ -25,18 +25,29 @@ from etl.services.reporteria import clave_periodo, normalizar_pago
 # gravable son la MISMA vigencia, no dos — hay que quedarse solo con el año.
 PROCESOS_ANUALES = {"DECLAREYPAGUE"}
 
+# Régimen Simple (Estrella) no tiene "reintentos": cada fila es un giro de DIAN ya
+# desembolsado, distinto de los demás aunque caigan en el mismo mes/contribuyente (p. ej.
+# dos anticipos del mismo año pagados la misma semana). Agruparlos por (documento, mes)
+# como a los demás procesos descartaría plata real como si fuera un duplicado, así que
+# aquí cada registro cuenta como su propio grupo — nunca se deduplica.
+PROCESOS_SIN_DEDUP = {"REGIMEN_SIMPLE"}
+
 
 def calcular(proceso):
     """Devuelve (ids_unicos, ids_excluidos, duplicados_por_elegido).
     duplicados_por_elegido: {id del registro elegido: cuántas copias se excluyeron}."""
     codigo = proceso.municipio.codigo
     es_anual = proceso.codigo in PROCESOS_ANUALES
+    sin_dedup = proceso.codigo in PROCESOS_SIN_DEDUP
     filas = list(EncabezadoCXC.objects.filter(proceso=proceso).values(
         "id", "numero_documento", "fecha_cobro", "estado_pago",
         "datos_extra__ano", "datos_extra__periodo"))
 
     grupos = defaultdict(list)
     for f in filas:
+        if sin_dedup:
+            grupos[("_sin_agrupar_", f["id"])].append(f)
+            continue
         doc = (f["numero_documento"] or "").strip()
         clave = clave_periodo(codigo, f["fecha_cobro"], f["datos_extra__ano"], f["datos_extra__periodo"])
         if es_anual and clave:

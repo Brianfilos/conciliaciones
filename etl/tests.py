@@ -1182,6 +1182,247 @@ class ReporteriaDeduplicaTests(TestCase):
         self.assertEqual(k["en_sistema"], k["total_unico"])
 
 
+class ProcesadorEstrellaRegimenSimpleTests(TestCase):
+    """Régimen Simple (RST), La Estrella: a diferencia de Auto/Rete/Declare, la fuente es
+    el "Informe Detallado Pagos (giros) ICAC" de DIAN, que no trae consecutivo propio ni
+    se cruza con GOBS — cada carga genera CXC nuevas (serie 908).
+
+    Hallazgo clave verificado contra el archivo real de DIAN (GIROS ICAC TERRITORIALES -
+    DETALLADO1.xlsx, 104 filas): "Impuesto - Actividad Gravada N" es el valor DECLARADO
+    (anual/consolidado), casi siempre mucho mayor que lo que DIAN realmente giró al
+    municipio en esa fila (columna "Pago Total ICAC") — la diferencia son retenciones,
+    autorretenciones y pagos previos. Sumar ese impuesto declarado tal cual sobrefactura
+    hasta 1000x en filas con retenciones grandes. Lo correcto es usarlo solo para repartir
+    PROPORCIONALMENTE lo que sí giró DIAN entre INDUSTRIAL/COMERCIAL/SERVICIOS."""
+
+    def setUp(self):
+        self.mun = Municipio.objects.create(codigo="ESTRRST", nombre="Estrella RST Test")
+        self.proceso = Proceso.objects.create(municipio=self.mun, codigo="REGIMEN_SIMPLE",
+                                              nombre="Régimen Simple (RST)")
+        from muni.models import CIIUMunicipio
+        CIIUMunicipio.objects.create(municipio=self.mun, codigo="4111", tipo="INDUSTRIAL")
+        CIIUMunicipio.objects.create(municipio=self.mun, codigo="4711", tipo="COMERCIAL")
+        CIIUMunicipio.objects.create(municipio=self.mun, codigo="6201", tipo="SERVICIOS")
+
+    def _archivo(self, filas):
+        """Arma un .xlsx con la misma forma que el informe real de DIAN: 4 filas de
+        título/metadatos antes del encabezado (fila 5), igual que GIROS ICAC
+        TERRITORIALES - DETALLADO.xlsx."""
+        import tempfile
+        import pandas as pd
+        cols = ["Año Gravable", "Periodo del año (aplica para anticipos)", "Tipo documento",
+                "Número de documento contribuyente que paga ICAC",
+                "Nombre o Razón Social del Contribuyente", "Número formulario F2593",
+                "Fecha pago realizado por contribuyente",
+                "Pago Total ICAC para este municipio o distrito",
+                "Intereses ICAC territorial", "Sanciones ICAC territorial",
+                "Código CIIU - Actividad Gravada 1", "Impuesto - Actividad gravada 1",
+                "Código CIIU - Actividad Gravada 2", "Impuesto - Actividad gravada 2",
+                "Código CIIU - Actividad Gravada 3", "Impuesto - Actividad gravada 3"]
+        df = pd.DataFrame(filas, columns=cols)
+        tf = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
+        tf.close()
+        with pd.ExcelWriter(tf.name, engine="openpyxl") as xl:
+            titulo = pd.DataFrame([[None] * len(cols)] * 4)
+            titulo.to_excel(xl, index=False, header=False, startrow=0)
+            df.to_excel(xl, index=False, startrow=4)
+        self.addCleanup(lambda: __import__("os").remove(tf.name))
+        return tf.name
+
+    def _fila(self, **over):
+        base = dict.fromkeys([
+            "Año Gravable", "Periodo del año (aplica para anticipos)", "Tipo documento",
+            "Número de documento contribuyente que paga ICAC",
+            "Nombre o Razón Social del Contribuyente", "Número formulario F2593",
+            "Fecha pago realizado por contribuyente",
+            "Pago Total ICAC para este municipio o distrito",
+            "Intereses ICAC territorial", "Sanciones ICAC territorial",
+            "Código CIIU - Actividad Gravada 1", "Impuesto - Actividad gravada 1",
+            "Código CIIU - Actividad Gravada 2", "Impuesto - Actividad gravada 2",
+            "Código CIIU - Actividad Gravada 3", "Impuesto - Actividad gravada 3",
+        ], 0)
+        base.update({"Año Gravable": 2026, "Periodo del año (aplica para anticipos)": 1,
+                     "Tipo documento": "NIT", "Fecha pago realizado por contribuyente": 20260613,
+                     "Intereses ICAC territorial": 0, "Sanciones ICAC territorial": 0})
+        base.update(over)
+        return base
+
+    def _procesar(self, filas):
+        from etl.services.estrella import ProcesadorEstrella
+        path = self._archivo(filas)
+        p = ProcesadorEstrella("REGIMEN_SIMPLE", {"declaraciones": path}, self.mun)
+        return p.procesar()
+
+    def test_reparte_proporcionalmente_no_usa_el_impuesto_declarado_directo(self):
+        """El caso real que casi se cuela: impuesto declarado (actividad 1) = 20.000.000
+        pero DIAN solo giró 10.000 en este periodo. El concepto debe quedar en 10.000, no
+        en 20.000.000 — si no, se sobrefactura al contribuyente."""
+        filas = [self._fila(
+            **{"Número de documento contribuyente que paga ICAC": "900111222",
+               "Nombre o Razón Social del Contribuyente": "EMPRESA UNO SAS",
+               "Pago Total ICAC para este municipio o distrito": 10000,
+               "Código CIIU - Actividad Gravada 1": "4111", "Impuesto - Actividad gravada 1": 20000000})]
+        df_enc, df_det = self._procesar(filas)
+        self.assertEqual(len(df_enc), 1)
+        self.assertEqual(df_enc.iloc[0]["total_a_pagar"], 10000)
+        self.assertEqual(len(df_det), 1)
+        self.assertEqual(df_det.iloc[0]["codigo_concepto"], "HDA732")  # INDUSTRIAL
+        self.assertEqual(df_det.iloc[0]["valor_total"], 10000)
+
+    def test_suma_todas_las_actividades_no_solo_las_dos_primeras(self):
+        """GIROS ICAC PENDIENTES.xlsx (la hoja de fórmulas de referencia) solo sumaba las
+        actividades 1 y 2 al concepto — un contribuyente con actividad en el renglón 3
+        perdía esa plata. Acá debe sumarse igual."""
+        filas = [self._fila(
+            **{"Número de documento contribuyente que paga ICAC": "900333444",
+               "Nombre o Razón Social del Contribuyente": "EMPRESA TRES SAS",
+               "Pago Total ICAC para este municipio o distrito": 5000,
+               "Código CIIU - Actividad Gravada 3": "6201", "Impuesto - Actividad gravada 3": 5000})]
+        df_enc, df_det = self._procesar(filas)
+        self.assertEqual(df_enc.iloc[0]["total_a_pagar"], 5000)
+        self.assertEqual(df_det.iloc[0]["codigo_concepto"], "HDA734")  # SERVICIOS
+        self.assertEqual(df_det.iloc[0]["valor_total"], 5000)
+
+    def test_dos_actividades_de_distinto_tipo_se_reparten_proporcional(self):
+        filas = [self._fila(
+            **{"Número de documento contribuyente que paga ICAC": "900555666",
+               "Nombre o Razón Social del Contribuyente": "EMPRESA MIXTA SAS",
+               "Pago Total ICAC para este municipio o distrito": 9000,
+               "Código CIIU - Actividad Gravada 1": "4111", "Impuesto - Actividad gravada 1": 3000000,
+               "Código CIIU - Actividad Gravada 2": "4711", "Impuesto - Actividad gravada 2": 6000000})]
+        df_enc, df_det = self._procesar(filas)
+        self.assertEqual(df_enc.iloc[0]["total_a_pagar"], 9000)
+        conceptos = dict(zip(df_det["codigo_concepto"], df_det["valor_total"]))
+        self.assertEqual(conceptos["HDA732"], 3000)   # INDUSTRIAL: 1/3 de 9000
+        self.assertEqual(conceptos["HDA733"], 6000)   # COMERCIAL: 2/3 de 9000
+        self.assertEqual(sum(conceptos.values()), 9000)
+
+    def test_intereses_y_sanciones_son_conceptos_aparte_y_entran_al_total(self):
+        filas = [self._fila(
+            **{"Número de documento contribuyente que paga ICAC": "900777888",
+               "Nombre o Razón Social del Contribuyente": "EMPRESA CUATRO SAS",
+               "Pago Total ICAC para este municipio o distrito": 13000,
+               "Intereses ICAC territorial": 1000, "Sanciones ICAC territorial": 2000,
+               "Código CIIU - Actividad Gravada 1": "6201", "Impuesto - Actividad gravada 1": 500000})]
+        df_enc, df_det = self._procesar(filas)
+        conceptos = dict(zip(df_det["codigo_concepto"], df_det["valor_total"]))
+        self.assertEqual(conceptos["IntICOM"], 1000)
+        self.assertEqual(conceptos["HD22"], 2000)
+        self.assertEqual(conceptos["HDA734"], 10000)  # ICA neto = 13000 - 1000 - 2000
+        self.assertEqual(df_enc.iloc[0]["total_a_pagar"], 13000)
+
+    def test_sobretasa_nunca_genera_un_concepto(self):
+        """No existe ninguna columna de sobretasa en lo que se lee — por diseño, nunca
+        puede aparecer un concepto que no sea uno de los 5 reales."""
+        filas = [self._fila(
+            **{"Número de documento contribuyente que paga ICAC": "900999000",
+               "Nombre o Razón Social del Contribuyente": "EMPRESA CINCO SAS",
+               "Pago Total ICAC para este municipio o distrito": 7000,
+               "Código CIIU - Actividad Gravada 1": "4111", "Impuesto - Actividad gravada 1": 7000})]
+        _, df_det = self._procesar(filas)
+        self.assertTrue(set(df_det["codigo_concepto"]) <= {"HDA732", "HDA733", "HDA734", "IntICOM", "HD22"})
+
+    def test_filas_sin_numero_de_documento_se_descartan(self):
+        """DIAN a veces agrega una nota al final del reporte que no es una declaración."""
+        filas = [
+            self._fila(**{"Número de documento contribuyente que paga ICAC": "900111000",
+                          "Nombre o Razón Social del Contribuyente": "EMPRESA SEIS SAS",
+                          "Pago Total ICAC para este municipio o distrito": 1000,
+                          "Código CIIU - Actividad Gravada 1": "4111", "Impuesto - Actividad gravada 1": 1000}),
+            self._fila(**{"Año Gravable": "NO HUBO AJUSTE DE TRANSFERENCIAS",
+                          "Número de documento contribuyente que paga ICAC": None}),
+        ]
+        df_enc, _ = self._procesar(filas)
+        self.assertEqual(len(df_enc), 1)
+
+    def test_fecha_formato_aaaammdd_se_interpreta_bien(self):
+        import datetime
+        filas = [self._fila(
+            **{"Número de documento contribuyente que paga ICAC": "900222111",
+               "Nombre o Razón Social del Contribuyente": "EMPRESA SIETE SAS",
+               "Fecha pago realizado por contribuyente": 20260613,
+               "Pago Total ICAC para este municipio o distrito": 1000,
+               "Código CIIU - Actividad Gravada 1": "4111", "Impuesto - Actividad gravada 1": 1000})]
+        df_enc, _ = self._procesar(filas)
+        self.assertEqual(df_enc.iloc[0]["fecha_cobro"].date(), datetime.date(2026, 6, 13))
+
+    def test_estado_pago_normaliza_a_pagado(self):
+        """DIAN ya giró esa plata antes de que exista el reporte: se carga como pagada."""
+        from etl.services.reporteria import normalizar_pago
+        filas = [self._fila(
+            **{"Número de documento contribuyente que paga ICAC": "900444111",
+               "Nombre o Razón Social del Contribuyente": "EMPRESA OCHO SAS",
+               "Pago Total ICAC para este municipio o distrito": 1000,
+               "Código CIIU - Actividad Gravada 1": "4111", "Impuesto - Actividad gravada 1": 1000})]
+        df_enc, _ = self._procesar(filas)
+        self.assertEqual(normalizar_pago(df_enc.iloc[0]["estado_pago"]), "PAGADO")
+
+    def test_consecutivo_arranca_en_9080000001_si_no_hay_nada_previo(self):
+        """Bug real encontrado al probar: sin ningún 908 previo (ni en la base ni en el
+        CXC externo), el primer consecutivo debía ser 9080000001, no 0000000001 — hay que
+        partir del piso de la serie, no de cero."""
+        filas = [self._fila(
+            **{"Número de documento contribuyente que paga ICAC": "900123123",
+               "Nombre o Razón Social del Contribuyente": "EMPRESA ONCE SAS",
+               "Pago Total ICAC para este municipio o distrito": 1000,
+               "Código CIIU - Actividad Gravada 1": "4111", "Impuesto - Actividad gravada 1": 1000})]
+        df_enc, _ = self._procesar(filas)
+        self.assertEqual(df_enc.iloc[0]["consecutivo_cxc"], "9080000001")
+
+    def test_consecutivo_continua_desde_el_mayor_908_del_cxc_externo(self):
+        """Aunque nunca hayamos cargado nada de Régimen Simple nosotros mismos, si el CXC
+        de Auto/Rete/Declare ya trae un 908 digitado a mano en el sistema externo, la
+        numeración nueva debe continuar después de ese, no chocar con él."""
+        import tempfile, os
+        from etl.models import Proceso as ProcesoModel, InsumoDefinicion, InsumoEjecucion, Ejecucion
+        from django.core.files.base import ContentFile
+        p_auto = ProcesoModel.objects.create(municipio=self.mun, codigo="CXC_AUTO", nombre="Autorretención")
+        insumo_def = InsumoDefinicion.objects.create(
+            proceso=p_auto, nombre="Archivo CXC", nombre_campo="cxc_csv", extensiones=".csv")
+        u = get_user_model().objects.create_user("rstcons", "rstcons@example.com", "Rst#2026", municipio=self.mun)
+        ej = Ejecucion.objects.create(proceso=p_auto, usuario=u)
+        csv_contenido = "CONSECUTIVO,ESTADO\n9080009999,ACTIVA\n9040000001,ACTIVA\n"
+        InsumoEjecucion.objects.create(
+            ejecucion=ej, insumo_def=insumo_def,
+            archivo=ContentFile(csv_contenido.encode("latin1"), name="cxc.csv"),
+            nombre_original="cxc.csv")
+
+        filas = [self._fila(
+            **{"Número de documento contribuyente que paga ICAC": "900666333",
+               "Nombre o Razón Social del Contribuyente": "EMPRESA NUEVE SAS",
+               "Pago Total ICAC para este municipio o distrito": 1000,
+               "Código CIIU - Actividad Gravada 1": "4111", "Impuesto - Actividad gravada 1": 1000})]
+        df_enc, _ = self._procesar(filas)
+        self.assertEqual(df_enc.iloc[0]["consecutivo_cxc"], "9080010000")
+
+    def test_segunda_carga_nunca_reutiliza_ni_actualiza_un_consecutivo_ya_guardado(self):
+        """Respuesta confirmada: siempre consecutivo nuevo, nunca se actualiza uno
+        existente aunque el documento/periodo se repita (dos giros reales distintos).
+        Pasa por MotorETL completo, que despacha el procesador por código de municipio
+        ('ESTRELLA' literal, ver motor.py), así que usa su propio municipio/proceso."""
+        from etl.services.motor import MotorETL
+        from etl.models import Ejecucion, EncabezadoCXC
+        mun = Municipio.objects.create(codigo="ESTRELLA", nombre="La Estrella (test motor)")
+        proceso = Proceso.objects.create(municipio=mun, codigo="REGIMEN_SIMPLE", nombre="Régimen Simple (RST)")
+        u = get_user_model().objects.create_user("rstdup", "rstdup@example.com", "Rst#2026", municipio=mun)
+        filas = [self._fila(
+            **{"Número de documento contribuyente que paga ICAC": "900888222",
+               "Nombre o Razón Social del Contribuyente": "EMPRESA DIEZ SAS",
+               "Pago Total ICAC para este municipio o distrito": 1000,
+               "Código CIIU - Actividad Gravada 1": "4111", "Impuesto - Actividad gravada 1": 1000})]
+        path = self._archivo(filas)
+        archivos = {"declaraciones": path}
+        ej1 = Ejecucion.objects.create(proceso=proceso, usuario=u)
+        MotorETL(ej1).ejecutar(archivos, {})
+        ej2 = Ejecucion.objects.create(proceso=proceso, usuario=u)
+        MotorETL(ej2).ejecutar(archivos, {})
+        self.assertEqual(ej1.estado, "COMPLETADO", ej1.error_log)
+        self.assertEqual(ej2.estado, "COMPLETADO", ej2.error_log)
+        registros = EncabezadoCXC.objects.filter(proceso=proceso)
+        self.assertEqual(registros.count(), 2)
+        self.assertEqual(len(set(registros.values_list("consecutivo_cxc", flat=True))), 2)
+
+
 class ProcesadorEnvigadoColumnasGobsTests(TestCase):
     """El NIT/nombre de la declaración de Envigado debe ser el del ESTABLECIMIENTO/
     contribuyente ("CedulaNIT del productor"/"Nombre del productor", que llegan del cruce
@@ -1414,6 +1655,33 @@ class UnicosDeclareYPagueEsAnualTests(TestCase):
         # meses distintos: siguen siendo dos vigencias separadas para Autorretención
         self.assertEqual(set(ids_u), {marzo.id, agosto.id})
         self.assertEqual(ids_e, [])
+
+
+class UnicosRegimenSimpleNuncaDeduplicaTests(TestCase):
+    """Régimen Simple (Estrella): cada fila es un giro de DIAN ya desembolsado, no un
+    reintento/corrección de una declaración — dos giros del mismo contribuyente en el
+    mismo mes son dos obligaciones reales distintas, no una duplicada. Si se agrupara
+    como los demás procesos (documento + mes de fecha_cobro), se perdería plata real."""
+
+    def setUp(self):
+        self.mun = Municipio.objects.create(codigo="RSTDEDUP", nombre="Estrella RST Dedup Test")
+        self.p = Proceso.objects.create(municipio=self.mun, codigo="REGIMEN_SIMPLE", nombre="Régimen Simple (RST)")
+        u = User.objects.create_user("rstdedup", "rstdedup@example.com", "Rst#2026", municipio=self.mun)
+        self.ej = Ejecucion.objects.create(proceso=self.p, usuario=u)
+
+    def test_mismo_documento_mismo_mes_no_se_colapsa(self):
+        from datetime import date
+        from etl.services import unicos
+        g1 = EncabezadoCXC.objects.create(proceso=self.p, ejecucion=self.ej, consecutivo_cxc="9080000001",
+            consecutivo_original="9080000001", numero_documento="900111222", fecha_cobro=date(2026, 5, 10),
+            estado_pago="PAGO REALIZADO", total_a_pagar=1000)
+        g2 = EncabezadoCXC.objects.create(proceso=self.p, ejecucion=self.ej, consecutivo_cxc="9080000002",
+            consecutivo_original="9080000002", numero_documento="900111222", fecha_cobro=date(2026, 5, 15),
+            estado_pago="PAGO REALIZADO", total_a_pagar=2000)
+        ids_u, ids_e, dup = unicos.calcular(self.p)
+        self.assertEqual(set(ids_u), {g1.id, g2.id})
+        self.assertEqual(ids_e, [])
+        self.assertEqual(dup, {})
 
 
 class AutoRefreshLoginTests(TestCase):

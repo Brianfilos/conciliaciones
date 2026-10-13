@@ -35,6 +35,9 @@ _*.py
 # Backups locales
 backups/
 
+# Logs de los comandos automáticos (actualizar_gobs, actualizar_sofinet, login_refresh)
+logs/
+
 # Claude Code
 .claude/
 

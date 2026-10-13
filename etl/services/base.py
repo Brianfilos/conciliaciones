@@ -73,8 +73,12 @@ class ProcesadorBase:
     def _load_cxc(self):
         if "cxc_csv" not in self.archivos:
             return pd.DataFrame(columns=["CONSECUTIVO", "ESTADO"])
-        p = self.archivos["cxc_csv"]
+        return self._load_cxc_de(self.archivos["cxc_csv"])
 
+    def _load_cxc_de(self, p):
+        """Igual que _load_cxc pero sobre una ruta cualquiera, no self.archivos['cxc_csv']
+        (la usa Régimen Simple para leer el último CXC ya cargado de otro proceso y saber
+        por dónde va la numeración, sin tener que resubir el mismo archivo)."""
         # 1. Intentar lectura tabular estándar (header en fila 0)
         try:
             df = pd.read_csv(p, encoding="latin1", sep=self.CSV_SEP)

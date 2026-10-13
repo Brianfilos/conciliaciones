@@ -38,17 +38,30 @@ class ProcesadorEstrella(ProcesadorBase):
     CONCEPTO_IND_DEC = "HDA839"
     CONCEPTO_COM_DEC = "HD75"
     CONCEPTO_SER_DEC = "HDA840"
+    # RÉGIMEN SIMPLE (RST) — conceptos propios, según CXC REGIMEN SIMPLE 13-03-2024.xlsx
+    PREFIJO_RST       = "908"
+    CONCEPTO_IND_RST  = "HDA732"
+    CONCEPTO_COM_RST  = "HDA733"
+    CONCEPTO_SER_RST  = "HDA734"
+
+    def procesar(self):
+        if self.proceso_codigo == "REGIMEN_SIMPLE":
+            return self._regimen_simple()
+        return super().procesar()
 
     def _load_cxc(self):
+        if "cxc_csv" not in self.archivos:
+            return pd.DataFrame(columns=["CONSECUTIVO", "ESTADO"])
+        return self._load_cxc_de(self.archivos["cxc_csv"])
+
+    def _load_cxc_de(self, p):
         """
-        Parsea el reporte SOFINET multi-sección de CXC.
+        Parsea el reporte SOFINET multi-sección de CXC, desde una ruta cualquiera (no
+        solo self.archivos['cxc_csv'] — Régimen Simple la usa para leer el último CXC
+        ya cargado por Auto/Rete/Declare sin tener que resubir el mismo archivo).
         Filas de datos: tienen fecha dd/mm/yyyy en col 0.
         CONSECUTIVO = col 5, ESTADO = col 2.
         """
-        if "cxc_csv" not in self.archivos:
-            return pd.DataFrame(columns=["CONSECUTIVO", "ESTADO"])
-        p = self.archivos["cxc_csv"]
-
         # Leer crudo sin header para detectar estructura dinámica
         raw = pd.read_csv(p, encoding="latin1", header=None, dtype=str)
 
@@ -300,4 +313,240 @@ class ProcesadorEstrella(ProcesadorBase):
             self._extra(dec, "TARJETA",    self.CONCEPTO_TAR, prefijo=self.PREFIJO_RENGLON_TARJETA),
         ] if e is not None]
         df_det = pd.concat(extras, ignore_index=True) if extras else self._empty_det()
+        return df_enc, df_det
+
+    # ── RÉGIMEN SIMPLE (RST) ─────────────────────────────────────────────────
+    # Fuente: "Informe Detallado Pagos (giros) ICAC" de DIAN (GIROS ICAC TERRITORIALES -
+    # DETALLADO.xlsx). A diferencia de Auto/Rete/Declare, este archivo no trae un
+    # consecutivo propio por fila ni se cruza con GOBS: cada carga genera cuentas por
+    # cobrar nuevas (serie 908), una por giro.
+    _PAT_ACTIVIDAD_RST = re.compile(r"Actividad [Gg]ravada (\d+)")
+
+    def _col_rst(self, df, *claves):
+        """Columna cuyo nombre contiene TODAS las claves (sin tildes/mayúsculas) — el
+        exportador de DIAN deja tabs sueltos y a veces corrompe la tilde de 'Código'."""
+        for c in df.columns:
+            cn = self._norm(c)
+            if all(self._norm(k) in cn for k in claves):
+                return c
+        return None
+
+    def _leer_rst(self):
+        """El archivo trae unas filas de título/metadatos antes del encabezado real;
+        se busca la fila que trae 'Año Gravable' y 'Tipo documento' a la vez."""
+        origen = self.archivos["declaraciones"]
+        raw = pd.read_excel(origen, header=None, nrows=20)
+        # "Año" llega con doble mojibake en este archivo (normaliza distinto cada vez),
+        # así que la detección se apoya en "GRAVABLE"/"TIPO DOCUMENTO", que sí llegan intactos.
+        header_row = next(
+            (i for i, fila in raw.iterrows()
+             if any("GRAVABLE" in self._norm(v) for v in fila)
+             and any("TIPO DOCUMENTO" in self._norm(v) for v in fila)),
+            None)
+        if header_row is None:
+            raise ValueError(
+                "No se encontró la fila de encabezado del archivo de DIAN "
+                "(se busca una fila con 'Año Gravable' y 'Tipo documento').")
+        df = pd.read_excel(origen, header=header_row)
+        df.columns = [str(c).strip() for c in df.columns]
+        return df
+
+    def _slots_actividad_rst(self, df):
+        """{n: {'codigo': col, 'impuesto': col}} para cada 'Actividad Gravada n' (hasta 15)."""
+        slots = {}
+        for c in df.columns:
+            m = self._PAT_ACTIVIDAD_RST.search(c)
+            if not m:
+                continue
+            n, cu = int(m.group(1)), c.upper()
+            if "IMPUESTO" in cu:
+                slots.setdefault(n, {})["impuesto"] = c
+            elif "DIGO" in cu or "CIIU" in cu:
+                slots.setdefault(n, {})["codigo"] = c
+        return {n: s for n, s in slots.items() if "codigo" in s and "impuesto" in s}
+
+    @staticmethod
+    def _limpiar_id_rst(v):
+        s = str(v).strip()
+        if s in ("", "nan", "None"):
+            return ""
+        try:
+            f = float(s)
+            if f == int(f):
+                return str(int(f))
+        except (ValueError, TypeError):
+            pass
+        return s
+
+    @staticmethod
+    def _fecha_rst(v):
+        """Las fechas de este archivo llegan como entero AAAAMMDD (p. ej. 20260613.0),
+        no como fecha real."""
+        if v is None or (isinstance(v, float) and pd.isna(v)):
+            return None
+        s = str(v).strip()
+        try:
+            s_entero = str(int(float(s)))
+        except (ValueError, TypeError):
+            return pd.to_datetime(v, errors="coerce")
+        if len(s_entero) == 8:
+            return pd.to_datetime(s_entero, format="%Y%m%d", errors="coerce")
+        return pd.to_datetime(v, errors="coerce")
+
+    def _siguiente_consecutivo_rst(self, cuantos):
+        """El archivo de DIAN no trae consecutivo propio: se asignan números nuevos de
+        la serie 908, continuando donde vaya lo más alto entre (a) lo que ya tengamos
+        guardado en este proceso y (b) lo que ya exista en el CXC externo más reciente
+        (Auto/Rete/Declare comparten el mismo archivo SOFINET) — puede haber números 908
+        digitados allá a mano que todavía no están en nuestra base."""
+        from etl.models import EncabezadoCXC, InsumoEjecucion, Proceso
+        maximo = int(self.PREFIJO_RST + "0" * 7)  # piso de la serie: 9080000000
+        proceso = Proceso.objects.filter(municipio=self.municipio, codigo="REGIMEN_SIMPLE").first()
+        if proceso:
+            for c in EncabezadoCXC.objects.filter(
+                    proceso=proceso, consecutivo_cxc__startswith=self.PREFIJO_RST
+            ).values_list("consecutivo_cxc", flat=True):
+                try:
+                    maximo = max(maximo, int(c))
+                except ValueError:
+                    continue
+        ultimo_insumo = (InsumoEjecucion.objects
+            .filter(insumo_def__nombre_campo="cxc_csv",
+                    insumo_def__proceso__municipio=self.municipio)
+            .order_by("-ejecucion__fecha_inicio").first())
+        if ultimo_insumo:
+            try:
+                cxc = self._load_cxc_de(ultimo_insumo.archivo.path)
+                rst = cxc[cxc["CONSECUTIVO"].astype(str).str.startswith(self.PREFIJO_RST)]
+                if not rst.empty:
+                    maximo = max(maximo, rst["CONSECUTIVO"].astype(int).max())
+            except Exception:
+                pass  # si el CXC externo no se puede leer, se sigue solo con lo propio
+        return [str(maximo + 1 + i).zfill(10) for i in range(cuantos)]
+
+    def _regimen_simple(self):
+        dec = self._leer_rst()
+
+        col_doc_tipo   = self._col_rst(dec, "Tipo documento")
+        col_doc_num    = self._col_rst(dec, "mero de documento")
+        col_nombre     = self._col_rst(dec, "Nombre", "Contribuyente")
+        col_m          = self._col_rst(dec, "Pago Total ICAC")
+        col_n          = self._col_rst(dec, "Intereses ICAC")
+        col_o          = self._col_rst(dec, "Sanciones ICAC")
+        col_f2593      = self._col_rst(dec, "mero formulario F2593")
+        col_ano        = self._col_rst(dec, "o Gravable")
+        col_periodo    = self._col_rst(dec, "Periodo del a")
+        col_fecha_pago = self._col_rst(dec, "Fecha pago realizado")
+
+        faltantes = [nom for nom, c in [
+            ("Tipo documento", col_doc_tipo), ("Número de documento", col_doc_num),
+            ("Pago Total ICAC", col_m), ("Año Gravable", col_ano),
+        ] if not c]
+        if faltantes:
+            raise ValueError("No se encontraron columnas esperadas en el archivo de DIAN: "
+                             + ", ".join(faltantes))
+
+        # Solo filas de datos reales: DIAN a veces agrega una nota al final del reporte
+        # (p. ej. "NO HUBO AJUSTE DE TRANSFERENCIAS") que no es una declaración.
+        dec = dec[pd.to_numeric(dec[col_doc_num], errors="coerce").notna()].reset_index(drop=True)
+
+        if dec.empty:
+            return pd.DataFrame(columns=["consecutivo_cxc", "consecutivo_original", "tipo_documento",
+                                         "numero_documento", "razon_social", "fecha_cobro",
+                                         "fecha_vencimiento", "descripcion", "total_a_pagar",
+                                         "estado_pago", "estado_cxc", "datos_extra"]), self._empty_det()
+
+        slots = self._slots_actividad_rst(dec)
+        consecutivos = self._siguiente_consecutivo_rst(len(dec))
+
+        filas_enc, filas_det = [], []
+        for i, (_, row) in enumerate(dec.iterrows()):
+            consec = consecutivos[i]
+
+            # Impuesto declarado por tipo de actividad (base del reparto, no el valor a
+            # cobrar: ver nota más abajo). Se suman TODAS las actividades que traiga la
+            # fila (hasta 15), no solo las dos primeras.
+            sums = {"INDUSTRIAL": 0.0, "COMERCIAL": 0.0, "SERVICIOS": 0.0}
+            for s in slots.values():
+                cod, imp = row.get(s["codigo"]), row.get(s["impuesto"])
+                if pd.isna(cod) or imp is None or pd.isna(imp) or float(imp) == 0:
+                    continue
+                codigo_norm = self._limpiar_id_rst(cod).zfill(4)
+                tipo = self._tipo_ciiu(codigo_norm)
+                if tipo in sums:
+                    sums[tipo] += float(imp)
+
+            m = float(row.get(col_m) or 0)
+            n_val = float(row.get(col_n) or 0) if col_n else 0.0
+            o_val = float(row.get(col_o) or 0) if col_o else 0.0
+            # "Impuesto - Actividad Gravada N" es el valor DECLARADO (anual/consolidado),
+            # casi siempre mayor que lo realmente girado — la diferencia son retenciones,
+            # autorretenciones y pagos ya practicados por fuera de este giro. Lo único que
+            # de verdad hay que cobrar en esta CXC es lo que GIRÓ DIAN (M); el desglose por
+            # actividad se usa solo para repartir esa plata EN PROPORCIÓN a cada tipo, no
+            # como el valor directo (se verificó contra el archivo real: sumar el impuesto
+            # declarado tal cual sobrefactura hasta 1000x en filas con retenciones previas
+            # grandes). Sobretasa NUNCA se calcula aquí (ver GIROS ICAC PENDIENTES.xlsx:
+            # cada fila le asignaba un código de concepto distinto — HD193, HD194... — en
+            # vez de uno fijo, señal de que es un cálculo que se coló por error).
+            ica_neto = round(m - n_val - o_val)
+            total_declarado = sum(sums.values())
+            split = {}
+            if total_declarado > 0 and ica_neto:
+                split = {k: round(ica_neto * v / total_declarado) for k, v in sums.items() if v}
+                diff = round(sum(split.values()) - ica_neto)
+                if diff and split:
+                    mayor = max(split, key=split.get)
+                    split[mayor] -= diff
+
+            MAPA_CONCEPTO = {"INDUSTRIAL": self.CONCEPTO_IND_RST,
+                             "COMERCIAL": self.CONCEPTO_COM_RST,
+                             "SERVICIOS": self.CONCEPTO_SER_RST}
+            for tipo, valor in split.items():
+                if valor:
+                    filas_det.append({
+                        "consecutivo_cxc": consec, "codigo_concepto": MAPA_CONCEPTO[tipo],
+                        "centro_costo": self.CENTRO, "cantidad": 1,
+                        "valor_unitario": valor, "valor_total": valor,
+                    })
+            if n_val:
+                filas_det.append({
+                    "consecutivo_cxc": consec, "codigo_concepto": self.CONCEPTO_INT,
+                    "centro_costo": self.CENTRO, "cantidad": 1,
+                    "valor_unitario": n_val, "valor_total": n_val,
+                })
+            if o_val:
+                filas_det.append({
+                    "consecutivo_cxc": consec, "codigo_concepto": self.CONCEPTO_SAN,
+                    "centro_costo": self.CENTRO, "cantidad": 1,
+                    "valor_unitario": o_val, "valor_total": o_val,
+                })
+
+            ano = self._limpiar_id_rst(row.get(col_ano))
+            periodo = self._limpiar_id_rst(row.get(col_periodo)) if col_periodo else ""
+            f2593 = self._limpiar_id_rst(row.get(col_f2593)) if col_f2593 else ""
+            fecha_cobro = self._fecha_rst(row.get(col_fecha_pago)) if col_fecha_pago else None
+            descripcion = "RÉGIMEN SIMPLE ICA AÑO GRAVABLE " + ano
+            if periodo:
+                descripcion += " PERIODO " + periodo
+            if f2593:
+                descripcion += " RADICADO F2593 No. " + f2593
+
+            filas_enc.append({
+                "consecutivo_cxc": consec, "consecutivo_original": f2593 or consec,
+                "tipo_documento": str(row.get(col_doc_tipo) or "").strip().upper(),
+                "numero_documento": self._limpiar_id_rst(row.get(col_doc_num)),
+                "razon_social": str(row.get(col_nombre) or "").strip() if col_nombre else "",
+                "fecha_cobro": fecha_cobro, "fecha_vencimiento": fecha_cobro,
+                "descripcion": descripcion,
+                "total_a_pagar": round(sum(split.values()) + n_val + o_val),
+                # DIAN ya le giró esta plata al municipio antes de que exista este reporte
+                # (trae fecha de giro y de pago del contribuyente diligenciadas): se carga
+                # como pagada, no como pendiente de cobro.
+                "estado_pago": "PAGO REALIZADO", "estado_cxc": "",
+                "datos_extra": {"ano": ano, "periodo": periodo, "f2593": f2593},
+            })
+
+        df_enc = pd.DataFrame(filas_enc)
+        df_det = pd.DataFrame(filas_det) if filas_det else self._empty_det()
         return df_enc, df_det
