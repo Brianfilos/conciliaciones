@@ -1183,13 +1183,17 @@ class ReporteriaDeduplicaTests(TestCase):
 
 
 class ProcesadorEnvigadoColumnasGobsTests(TestCase):
-    """GOBS cambió la vista de Envigado: 'Cedula/NIT propietario'/'Nombre productor'
-    desaparecieron y ahora el NIT/nombre del contribuyente vienen en
-    '25. No documento de identidad'/'24. Nombre del Contribuyente o Representante Legal'.
-    Esto rompía _rete() con un AttributeError ('str' object has no attribute 'fillna')
-    porque dec.get(...) caía en el valor por defecto "" al no encontrar la columna vieja.
-    Se prueban ambos esquemas de columnas (el nuevo de GOBS y el viejo de Excel) para no
-    volver a romper ninguno de los dos."""
+    """El NIT/nombre de la declaración de Envigado debe ser el del ESTABLECIMIENTO/
+    contribuyente ("CedulaNIT del productor"/"Nombre del productor", que llegan del cruce
+    con establecimientos en gobs_pg._cruzar_establecimientos), no el de quien firma el
+    formulario ("24./25. ... Representante Legal"). Bug real en producción: para una
+    empresa (TRAVESA SAS, NIT 800205579) el sistema mostró en su lugar la cédula y el
+    nombre del representante legal (72001830, JOSE JAVIER HERNANDEZ JIMENEZ) — una
+    persona distinta. Antes de eso, un intento de fix previo rompía _rete() con un
+    AttributeError porque buscaba columnas que nunca existieron con ese nombre exacto
+    ("Cedula/NIT propietario"/"Nombre productor"; los reales en GOBS llevan otra
+    redacción). Se prueban ambos esquemas y, sobre todo, que cuando los dos coexisten
+    gana el del establecimiento."""
 
     def setUp(self):
         self.mun = Municipio.objects.create(codigo="ENVCOLGOBS", nombre="Envigado Columnas Test")
@@ -1204,19 +1208,36 @@ class ProcesadorEnvigadoColumnasGobsTests(TestCase):
         fila.update(extra)
         return fila
 
-    def test_esquema_nuevo_de_gobs(self):
+    def test_usa_el_nit_del_establecimiento_aunque_tambien_venga_el_representante_legal(self):
+        """Caso real: las dos fuentes están presentes a la vez (es lo normal, GOBS siempre
+        cruza establecimientos) y debe ganar la del establecimiento, no el representante."""
         import pandas as pd
         from etl.services.envigado import ProcesadorEnvigado
         dec = pd.DataFrame([self._fila_base(**{
-            "25. No documento de identidad": "900123456",
-            "24. Nombre del Contribuyente o Representante Legal": "Empresa Nueva SAS",
+            "CedulaNIT del productor": "800205579", "Nombre del productor": "TRAVESA SAS",
+            "25. No documento de identidad": "72001830",
+            "24. Nombre del Contribuyente o Representante Legal": "JOSE JAVIER HERNANDEZ JIMENEZ",
         })])
         proc = ProcesadorEnvigado("CXC_RETE", {"declaraciones": dec}, self.mun)
         df_enc, _ = proc._rete()
-        self.assertEqual(df_enc.iloc[0]["numero_documento"], "900123456")
-        self.assertEqual(df_enc.iloc[0]["razon_social"], "Empresa Nueva SAS")
+        self.assertEqual(df_enc.iloc[0]["numero_documento"], "800205579")
+        self.assertEqual(df_enc.iloc[0]["razon_social"], "TRAVESA SAS")
 
-    def test_esquema_viejo_de_excel_sigue_funcionando(self):
+    def test_usa_el_representante_legal_si_no_hay_dato_del_establecimiento(self):
+        """Respaldo: si el cruce con establecimientos no trajo nada para esa fila, es
+        mejor mostrar el representante legal que dejar el campo vacío."""
+        import pandas as pd
+        from etl.services.envigado import ProcesadorEnvigado
+        dec = pd.DataFrame([self._fila_base(**{
+            "25. No documento de identidad": "72001830",
+            "24. Nombre del Contribuyente o Representante Legal": "JOSE JAVIER HERNANDEZ JIMENEZ",
+        })])
+        proc = ProcesadorEnvigado("CXC_RETE", {"declaraciones": dec}, self.mun)
+        df_enc, _ = proc._rete()
+        self.assertEqual(df_enc.iloc[0]["numero_documento"], "72001830")
+        self.assertEqual(df_enc.iloc[0]["razon_social"], "JOSE JAVIER HERNANDEZ JIMENEZ")
+
+    def test_esquema_viejo_de_excel_sigue_funcionando_como_ultimo_respaldo(self):
         import pandas as pd
         from etl.services.envigado import ProcesadorEnvigado
         dec = pd.DataFrame([self._fila_base(**{

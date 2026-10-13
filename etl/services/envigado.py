@@ -133,12 +133,15 @@ class ProcesadorEnvigado:
                     "razon_social", "fecha_cobro", "fecha_vencimiento",
                     "descripcion", "total_a_pagar", "estado_pago", "estado_cxc"]
 
-        # Map NIT y Nombre — GOBS cambió esta vista: ya no trae "Cedula/NIT propietario" ni
-        # "Nombre productor", ahora vienen como "25. No documento de identidad" y
-        # "24. Nombre del Contribuyente o Representante Legal". Se prueban ambos nombres
-        # (el nuevo primero) para no romper si algún Excel viejo todavía usa el formato anterior.
-        col_doc = self._col(dec, "25. No documento de identidad", "Cedula/NIT propietario")
-        col_nom = self._col(dec, "24. Nombre del Contribuyente", "Nombre productor")
+        # Map NIT y Nombre: debe ser el del ESTABLECIMIENTO/contribuyente (p. ej. "TRAVESA
+        # SAS"), no el de quien firma el formulario — "24./25." es el representante legal,
+        # que para una empresa es una persona distinta con su propia cédula (bug real: salió
+        # "72001830 JOSE JAVIER HERNANDEZ JIMENEZ" en vez del NIT de la empresa). El dato
+        # correcto viene del cruce con establecimientos (gobs_pg._cruzar_establecimientos)
+        # como "CedulaNIT del productor"/"Nombre del productor"; "24./25." queda de respaldo
+        # solo si ese cruce no trajo nada para esa fila.
+        col_doc = self._col(dec, "CedulaNIT del productor", "25. No documento de identidad", "Cedula/NIT propietario")
+        col_nom = self._col(dec, "Nombre del productor", "24. Nombre del Contribuyente", "Nombre productor")
         dec["numero_documento"] = dec[col_doc].astype(str) if col_doc else ""
         dec["razon_social"]     = dec[col_nom].fillna("").astype(str) if col_nom else ""
 
@@ -228,8 +231,11 @@ class ProcesadorEnvigado:
         consec_col = "Consecutivo 1" if "Consecutivo 1" in dec.columns else "Consecutivo"
         dec["consecutivo_cxc"]      = dec[consec_col].astype(str).str.strip()
         dec["consecutivo_original"] = dec["consecutivo_cxc"]
-        col_ced  = self._col(dec, "25. No documento de identidad", "Cedula/NIT propietario")
-        col_nom  = self._col(dec, "24. Nombre del Contribuyente", "Nombre productor")
+        # Ver el comentario equivalente en _auto(): el NIT/nombre debe ser el del
+        # establecimiento ("CedulaNIT del productor"/"Nombre del productor"), no el del
+        # representante legal que firma ("24./25.").
+        col_ced  = self._col(dec, "CedulaNIT del productor", "25. No documento de identidad", "Cedula/NIT propietario")
+        col_nom  = self._col(dec, "Nombre del productor", "24. Nombre del Contribuyente", "Nombre productor")
         col_pres = self._col(dec, "Fecha de presentacion")
         col_tot  = self._col(dec, "23. Total a pagar")
         dec["numero_documento"]     = dec[col_ced].astype(str) if col_ced else ""
