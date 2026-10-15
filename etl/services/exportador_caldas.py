@@ -466,6 +466,6 @@ def build_rows(proceso, filtros=None):
                 det.codigo_concepto,                    # código_cpto_saimyr
                 f"{float(det.valor_total):.2f}" if det.valor_total is not None else "0.00",  # valor_pagado
                 extra.get("codigo_banco", "1"),         # código_banco
-                extra.get("numero_cuenta", "2"),        # número_cuenta
+                extra.get("numero_cuenta", "224"),      # número_cuenta
             ])
     return HEADERS, rows

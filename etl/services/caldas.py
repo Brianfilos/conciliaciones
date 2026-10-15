@@ -256,7 +256,7 @@ class ProcesadorCaldas:
                     "tel_tercero":   _sv(r[tel_col])   if tel_col   else "",
                     "email_tercero": _sv(r[email_col]) if email_col else "",
                     "codigo_banco":  "1",
-                    "numero_cuenta": "2",
+                    "numero_cuenta": "224",
                 },
             })
         return pd.DataFrame(rows)
