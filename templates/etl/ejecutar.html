@@ -112,10 +112,25 @@
 {% endblock %}
 {% block extra_js %}
 <script>
+// Un campo "required" dentro de un contenedor oculto (hidden) bloquea el envío del
+// formulario en silencio: el navegador no deja mandar la petición, pero como el campo
+// no se ve, tampoco muestra ningún aviso — se siente como que el botón "no responde".
+// Pasó con "Declaraciones desde" al elegir "Cargar archivo manual" (bug real reportado).
 function cambiarModoCarga(modo) {
   var esGobs = modo === 'gobs';
-  document.querySelectorAll('.campo-gobs').forEach(function (el) { el.hidden = !esGobs; });
-  document.querySelectorAll('.campo-manual').forEach(function (el) { el.hidden = esGobs; });
+  function ajustar(grupo, visible) {
+    document.querySelectorAll(grupo).forEach(function (el) {
+      el.hidden = !visible;
+      el.querySelectorAll('input, select, textarea').forEach(function (campo) {
+        if (campo.dataset.requerido === undefined) {
+          campo.dataset.requerido = campo.required ? '1' : '0';
+        }
+        campo.required = visible && campo.dataset.requerido === '1';
+      });
+    });
+  }
+  ajustar('.campo-gobs', esGobs);
+  ajustar('.campo-manual', !esGobs);
 }
 document.getElementById("ejecutar-form").addEventListener("submit", function(){
   var btn = document.getElementById("btn-ejecutar");

@@ -933,6 +933,50 @@ class CargueManualOpcionalTests(TestCase):
         self.assertEqual(len(enc.numero_documento), 20)
 
 
+class FechaDesdeNoObligatoriaConArchivoManualTests(TestCase):
+    """Bug real reportado: en un municipio con GOBS (Caldas), el usuario elegía "Cargar
+    archivo manual", subía los dos archivos y le daba a "Ejecutar proceso" — y no pasaba
+    nada ("le doy a Ejecutar proceso y no da"). Causa: "Declaraciones desde" seguía siendo
+    obligatorio en el servidor sin importar el modo elegido en el formulario; el JS solo
+    ocultaba el campo (arreglado aparte para que tampoco bloquee el envío en el navegador),
+    pero Django igual rechazaba la petición al llegar vacía, recargando la página sin ningún
+    aviso visible (el campo con el error volvía a quedar oculto). La fecha no se usa para
+    nada cuando se sube un archivo: MotorETL._completar_desde_gobs prioriza el archivo
+    sobre GOBS pase lo que pase."""
+
+    def _proceso(self):
+        from etl.models import InsumoDefinicion
+        mun = Municipio.objects.create(codigo="CALDAS", nombre="Caldas Form Test")
+        p = Proceso.objects.create(municipio=mun, codigo="CXC_AUTO", nombre="Autorretención")
+        InsumoDefinicion.objects.create(proceso=p, nombre="Declaraciones", nombre_campo="declaraciones",
+                                        tipo="CARGUE", extensiones=".xlsx", orden=1)
+        InsumoDefinicion.objects.create(proceso=p, nombre="Actividades", nombre_campo="actividades",
+                                        tipo="CARGUE", extensiones=".xlsx", orden=2)
+        return p
+
+    def _archivo(self, nombre="declaraciones.xlsx"):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        return SimpleUploadedFile(nombre, b"contenido-de-prueba",
+                                  content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    def test_con_archivo_manual_no_exige_fecha_desde(self):
+        from etl.forms import EjecutarProcesoForm
+        p = self._proceso()
+        files = {"declaraciones": self._archivo(), "actividades": self._archivo("actividades.xlsx")}
+        form = EjecutarProcesoForm(p, data={}, files=files)
+        self.assertFalse(form.fields["fecha_desde"].required)
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_sin_archivo_manual_fecha_desde_sigue_siendo_obligatoria(self):
+        """Modo GOBS (sin subir nada): la fecha sigue haciendo falta, igual que antes."""
+        from etl.forms import EjecutarProcesoForm
+        p = self._proceso()
+        form = EjecutarProcesoForm(p, data={}, files={})
+        self.assertTrue(form.fields["fecha_desde"].required)
+        self.assertFalse(form.is_valid())
+        self.assertIn("fecha_desde", form.errors)
+
+
 class ActualizarGobsCommandTests(TestCase):
     def setUp(self):
         self.caldas = Municipio.objects.create(codigo="CALDAS", nombre="Caldas Test")

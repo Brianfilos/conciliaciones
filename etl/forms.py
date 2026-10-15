@@ -46,9 +46,17 @@ class EjecutarProcesoForm(forms.Form):
                 validators=[_validador_archivo(insumo.extensiones)],
             )
         if self.usa_gobs:
+            # Si el usuario cargó el archivo a mano, "Declaraciones desde" no se usa para
+            # nada (MotorETL._completar_desde_gobs ni siquiera consulta GOBS en ese caso) y
+            # no debe ser obligatorio — antes lo era siempre que el municipio usara GOBS, sin
+            # importar el modo elegido: el campo quedaba oculto por el JS pero seguía
+            # marcado "required" en el HTML, así que el navegador bloqueaba el envío en
+            # silencio (si se le quitaba el required solo en JS, el servidor lo seguía
+            # rechazando igual). Bug real reportado: "le doy a Ejecutar proceso y no da".
+            tiene_archivo_manual = bool(self.files.get("declaraciones"))
             fecha = lambda: forms.DateInput(attrs={"class": "form-control", "type": "date"})
             self.fields["fecha_desde"] = forms.DateField(
-                label="Declaraciones desde", required=True, widget=fecha(),
+                label="Declaraciones desde", required=not tiene_archivo_manual, widget=fecha(),
                 help_text="Fecha de la declaración (inclusive).")
             self.fields["fecha_hasta"] = forms.DateField(
                 label="Declaraciones hasta", required=False, widget=fecha(),
