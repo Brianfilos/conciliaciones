@@ -50,14 +50,16 @@ def generar(proceso, filtros, columnas_elegidas=None, incluir_duplicados=False):
         return [], []
 
     encabezados = _encabezados_filtrados(proceso, filtros, incluir_duplicados)
-    from django.db.models import Max, Min
-    rango = encabezados.aggregate(desde=Min("fecha_cobro"), hasta=Max("fecha_cobro"))
     consecs_norm = {_normalizar_consec(c) for c in
                     encabezados.values_list("consecutivo_original", flat=True) if c}
     if not consecs_norm:
         return columnas_elegidas or [], []
 
-    datos, _ = gobs_pg.cargar(fuente, rango["desde"], rango["hasta"])
+    # Se filtra por los consecutivos exactos, no por rango de fechas: lo que se exporta
+    # puede venir de años de historia (p. ej. "Pagadas" sin filtro de año), y traer todo
+    # ese rango de GOBS para luego filtrar en Python era lento — en producción llegó a
+    # colgarse sin terminar nunca (bug real reportado, Caldas).
+    datos, _ = gobs_pg.cargar(fuente, consecutivos=consecs_norm)
     dec = datos.get("declaraciones")
     col_consec = fuente.col_consecutivo
     if dec is None or dec.empty or col_consec not in dec.columns:

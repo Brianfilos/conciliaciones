@@ -1552,6 +1552,23 @@ class ExportCompletoServiceTests(TestCase):
             headers, filas = export_completo.generar(self.p, {}, None, incluir_duplicados=True)
         self.assertEqual(headers, ["Consecutivo", "Nombre", "Otro"])
 
+    def test_consulta_gobs_por_consecutivo_no_por_rango_de_fechas(self):
+        """Bug real reportado: en Caldas, exportar 'Pagadas' sin filtro de año traía de
+        GOBS TODO el rango de fechas de lo cargado (puede ser años de historia) para
+        filtrar después en Python — en producción eso se quedaba cargando sin terminar.
+        Debe pedirle a GOBS solo los consecutivos exactos que hacen falta."""
+        from unittest.mock import patch
+        from etl.services import export_completo
+        with patch("etl.services.export_completo.gobs_pg.fuente_para", return_value=self._fuente_falsa()), \
+             patch("etl.services.export_completo.gobs_pg.cargar",
+                   return_value=({"declaraciones": self._df_falso()}, {})) as mock_cargar:
+            export_completo.generar(self.p, {}, None, incluir_duplicados=True)
+        _, kwargs = mock_cargar.call_args
+        self.assertIn("consecutivos", kwargs)
+        self.assertEqual(set(kwargs["consecutivos"]), {"1", "2"})
+        self.assertNotIn("desde", kwargs)
+        self.assertNotIn("hasta", kwargs)
+
 
 class ExportarCompletoViewTests(TestCase):
     def setUp(self):

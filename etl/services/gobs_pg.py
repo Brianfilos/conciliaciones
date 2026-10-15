@@ -255,21 +255,29 @@ def _cruzar_establecimientos(conn, fuente, dec):
     return out[orden_est + resto]
 
 
-def cargar(fuente: Fuente, desde=None, hasta=None) -> tuple[dict, dict]:
+def cargar(fuente: Fuente, desde=None, hasta=None, consecutivos=None) -> tuple[dict, dict]:
     """
     Devuelve ({"declaraciones": df, "actividades": df?}, meta).
     `desde`/`hasta` (date) filtran por la fecha de la declaración, ambos inclusive.
+    `consecutivos`: si se da, filtra por esos consecutivos exactos en vez de por fecha —
+    mucho más rápido cuando ya se sabe cuáles hacen falta (ver export_completo.generar),
+    en vez de traer todo un rango de fechas (potencialmente años) para filtrar en Python.
     """
     from psycopg2 import sql
 
     condiciones, params = [], []
-    fecha = sql.Identifier(fuente.col_fecha)
-    if desde:
-        condiciones.append(sql.SQL("{} >= %s").format(fecha))
-        params.append(desde)
-    if hasta:
-        condiciones.append(sql.SQL("{} < %s").format(fecha))
-        params.append(hasta + timedelta(days=1))
+    if consecutivos:
+        valores = [float(c) for c in consecutivos]
+        condiciones.append(sql.SQL("{} = ANY(%s)").format(sql.Identifier(fuente.col_consecutivo)))
+        params.append(valores)
+    else:
+        fecha = sql.Identifier(fuente.col_fecha)
+        if desde:
+            condiciones.append(sql.SQL("{} >= %s").format(fecha))
+            params.append(desde)
+        if hasta:
+            condiciones.append(sql.SQL("{} < %s").format(fecha))
+            params.append(hasta + timedelta(days=1))
     donde = sql.SQL(" AND ").join(condiciones) if condiciones else None
 
     conn = _conectar()
