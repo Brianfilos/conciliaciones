@@ -767,6 +767,28 @@ class MergeCxcTests(TestCase):
         self.assertEqual(dec.loc[0, "estado_cxc"], "")
 
 
+class LineaTxtTests(TestCase):
+    """Bug real en producción: una dirección de Caldas traía un '|' suelto
+    ("CR 52| # 29A 111 OF 314") y el export TXT (separador '|' sin escapar) corría
+    código_banco/número_cuenta una posición para esa fila — se veía como si número_cuenta
+    hubiera cambiado de "2" a otro valor, cuando en realidad todas las columnas
+    posteriores a la dirección quedaban desplazadas."""
+
+    def test_quita_pipes_sueltos_de_los_campos(self):
+        from etl.views import _linea_txt
+        linea = _linea_txt(["900", "CR 52| # 29A 111 OF 314", "1", "2"])
+        self.assertEqual(linea, "900|CR 52  # 29A 111 OF 314|1|2")
+
+    def test_mantiene_el_numero_de_columnas_aunque_haya_varios_pipes(self):
+        from etl.views import _linea_txt
+        linea = _linea_txt(["a", "b|c|d", "e"])
+        self.assertEqual(linea.count("|"), 2)  # 3 campos -> 2 separadores, ni uno más
+
+    def test_none_se_vuelve_cadena_vacia(self):
+        from etl.views import _linea_txt
+        self.assertEqual(_linea_txt(["x", None, "y"]), "x||y")
+
+
 class NormalizarPagoTests(TestCase):
     def test_pago_realizado_es_pagado(self):
         from etl.services.reporteria import normalizar_pago

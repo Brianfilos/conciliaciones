@@ -36,6 +36,14 @@ def _parse_fecha(valor):
         return None
 
 
+def _linea_txt(valores):
+    """Une valores con '|' para el export TXT plano. Si algún campo trae un '|' suelto
+    (p. ej. una dirección: "CR 52| # 29A 111 OF 314" — pasó con datos reales de Caldas),
+    ese separador de más corre todas las columnas siguientes una posición — se quita antes
+    de unir para que el número de columnas nunca cambie."""
+    return "|".join(("" if v is None else str(v)).replace("|", " ") for v in valores)
+
+
 def _run_motor(ejecucion_id, archivos, filtros=None):
     """Ejecuta el motor ETL en un hilo separado."""
     import django
@@ -675,9 +683,7 @@ class ExportarView(View):
             # txt (por defecto)
             response = HttpResponse(content_type="text/plain; charset=utf-8")
             response["Content-Disposition"] = f'attachment; filename="{nombre_base}_saimyr.txt"'
-            lines = ["|".join(str(h) for h in headers)]
-            for row in data:
-                lines.append("|".join("" if v is None else str(v) for v in row))
+            lines = [_linea_txt(headers)] + [_linea_txt(row) for row in data]
             response.write("\n".join(lines))
             return response
 
@@ -1196,8 +1202,6 @@ class ExportarView(View):
         else:  # txt
             response = HttpResponse(content_type="text/plain; charset=utf-8")
             response["Content-Disposition"] = f'attachment; filename="{nombre}.txt"'
-            lines = ["|".join(str(h) for h in headers)]
-            for row in data:
-                lines.append("|".join("" if v is None else str(v) for v in row))
+            lines = [_linea_txt(headers)] + [_linea_txt(row) for row in data]
             response.write("\n".join(lines))
             return response
