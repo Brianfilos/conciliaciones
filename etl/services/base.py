@@ -252,12 +252,18 @@ class ProcesadorBase:
             and (also is None or self._norm(also) in self._norm(c))
             and (prefijo is None or self._norm(c).startswith(tuple(prefijo)))
         ]
-        col = None
-        for c in candidates:
-            if pd.to_numeric(dec[c], errors="coerce").notna().any():
-                col = c
-                break
-        if col is None:
+        # Entre las candidatas, la columna real del valor es la que tiene MÁS datos
+        # numéricos — no la primera con "alguno" (.any()): un campo de texto libre
+        # (p. ej. "Cuál otra sanción") puede traer un único valor suelto que parezca
+        # numérico (hasta un simple "0") y eso bastaba para ganarle a la columna
+        # correcta con miles de valores reales, dejando esa concepto sin capturar en
+        # casi toda la base. Bug real: "Digite valor sanciones a declarar" (2.262
+        # declaraciones con sanción real) quedaba tapada por "Cuál otra sanción"
+        # (1 solo valor) en Declare y Pague de Estrella — el residuo terminaba
+        # mezclado en el concepto de ICA por el ajuste de cierre.
+        conteos = {c: pd.to_numeric(dec[c], errors="coerce").notna().sum() for c in candidates}
+        col = max(conteos, key=conteos.get) if conteos else None
+        if not col or conteos[col] == 0:
             return None
         t = dec[["consecutivo_cxc", col]].copy()
         t[col] = pd.to_numeric(t[col], errors="coerce")

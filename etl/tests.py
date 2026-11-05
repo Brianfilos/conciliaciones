@@ -1576,6 +1576,37 @@ class BaseRenameRazonSocialTests(TestCase):
         self.assertEqual(dec.iloc[0]["razon_social"], "TOOLS AND SERVICES SAS")
 
 
+class ExtraColumnaMasPobladaTests(TestCase):
+    """_extra() elegía la primera columna candidata con ALGÚN valor numérico (.any()),
+    no la que de verdad tiene el dato. Bug real en producción: en Declare y Pague de
+    Estrella, "Cuál otra sanción" (campo de texto libre, con un solo "0" suelto en toda
+    la base) le ganaba a "Digite valor sanciones a declarar" (2.262 declaraciones con
+    sanción real) porque aparecía primero entre las columnas. El resultado: la sanción
+    real nunca se capturaba y el ajuste de cierre de _declare() terminaba sumando ese
+    residuo al concepto de ICA, inflándolo sin explicación aparente (radicado 264661:
+    ICA mostraba $1.214.452 en vez de $691.000 real, por una sanción de $523.738 que
+    se perdía)."""
+
+    def setUp(self):
+        self.mun = Municipio.objects.create(codigo="ESTREXT", nombre="Estrella Extra Test")
+
+    def test_prefiere_la_columna_con_mas_datos_reales_no_la_primera_con_alguno(self):
+        import pandas as pd
+        from etl.services.estrella import ProcesadorEstrella
+        proc = ProcesadorEstrella("CXC_AUTO", {}, self.mun)
+        dec = pd.DataFrame([
+            {"consecutivo_cxc": "1", "Cual otra sancion": 0,
+             "Digite valor sanciones a declarar": 523738},
+            {"consecutivo_cxc": "2", "Cual otra sancion": None,
+             "Digite valor sanciones a declarar": 10000},
+        ])
+        r = proc._extra(dec, "SANCION", "HD22")
+        self.assertIsNotNone(r)
+        fila = r[r["consecutivo_cxc"] == "1"]
+        self.assertEqual(len(fila), 1)
+        self.assertEqual(fila.iloc[0]["valor_unitario"], 523738)
+
+
 class ExportCompletoServiceTests(TestCase):
     def setUp(self):
         from datetime import date
