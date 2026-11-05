@@ -110,21 +110,15 @@ FUENTES[("CALDAS", "CXC_AUTO")] = Fuente(
     cols_actividad=_COLS_ACT_AUTO, col_union_actividades="Id Visita")
 FUENTES[("CALDAS", "CXC_RETE")] = Fuente("alcaldia_de_caldas", "uvw_f_reteica__caldas")
 
-# Caldas DECLAREYPAGUE: LISTO PERO DESACTIVADO. Al 2026-09-23 GOBS no tiene las actividades
-# ICA de Caldas (cq_actividades_gravadas: 11 filas, todas de prueba, frente a 9.084 en
-# Copacabana). Las 4 columnas "Q 1934xx" son las preguntas del formulario, en este orden:
-# código CIIU, ingresos gravados, tarifa, impuesto. Activar con GOBS_PG_CALDAS_DECLARE=True
-# cuando GOBS cargue las actividades (validar antes con verificar_gobs).
+# Caldas DECLAREYPAGUE: GOBS ya trae uvw_cq_actividades_gravadas_ica con nombres de columna
+# limpios (igual que Estrella/Copacabana) en vez de los códigos de pregunta "Q 1934xx" que
+# tenía al desactivarse (verificado con verificar_gobs: 2026-11-05, 2.460 declaraciones).
 FUENTES[("CALDAS", "DECLAREYPAGUE")] = Fuente(
     "alcaldia_de_caldas", "uvw_f_ica_anual__caldas",
     actividades="uvw_cq_actividades_gravadas_ica",
-    cols_actividad=r"^Q 19347[89]$|^Q 19348[01]$", col_union_actividades="Id Visita",
-    renombrar_actividades=(
-        ("Q 193478", "Codigo segun codificacion municipal o distrital"),
-        ("Q 193479", "Ingresos gravados"),
-        ("Q 193480", "Tarifa"),
-        ("Q 193481", "Impuestos de industria y comercio"),
-    ),
+    cols_actividad=r"^(Codigo segun codificacion|Ingresos gravados|Tarifa|"
+                   r"Impuestos de industria y comercio)",
+    col_union_actividades="Id Visita",
     activar_con="GOBS_PG_CALDAS_DECLARE")
 
 # Envigado: sin CXC de otro sistema y con "Fecha de presentacion" en lugar de fecha de visita.

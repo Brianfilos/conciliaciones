@@ -1556,6 +1556,26 @@ class ProcesadorEnvigadoColumnasGobsTests(TestCase):
         self.assertEqual(df_enc.iloc[0]["razon_social"], "Empresa Vieja Ltda")
 
 
+class BaseRenameRazonSocialTests(TestCase):
+    """_base_rename (compartido por Estrella y Copacabana) buscaba la columna 'Nombre
+    productor' para razon_social, pero GOBS la llama 'Nombre del productor' — la palabra
+    "del" en medio rompe el match tanto exacto como fuzzy (substring). Bug real en
+    producción confirmado el 2026-11-05: el 100% de los NIT de Estrella y Copacabana
+    (Autorretención, Retención ICA y Declare y Pague) perdían el nombre/razón social."""
+
+    def test_usa_nombre_del_productor_real_de_gobs(self):
+        import pandas as pd
+        from etl.services.estrella import ProcesadorEstrella
+        mun = Municipio.objects.create(codigo="ESTRBR", nombre="Estrella Base Rename Test")
+        proc = ProcesadorEstrella("CXC_AUTO", {}, mun)
+        dec = pd.DataFrame([{
+            "Consecutivo 1": 100, "Nombre del productor": "TOOLS AND SERVICES SAS",
+            "Tipo de documento": "NIT",
+        }])
+        dec = proc._base_rename(dec, "Consecutivo 1")
+        self.assertEqual(dec.iloc[0]["razon_social"], "TOOLS AND SERVICES SAS")
+
+
 class ExportCompletoServiceTests(TestCase):
     def setUp(self):
         from datetime import date

@@ -160,7 +160,7 @@ class ProcesadorBase:
             ("Segundo nombre",   "segundo_nombre"),
             ("Primer apellido",  "primer_apellido"),
             ("Segundo apellido", "segundo_apellido"),
-            ("Nombre productor", "razon_social"),
+            ("Nombre del productor", "razon_social"),
         ]:
             if target not in dec.columns and exact not in rn.values():
                 if exact in dec.columns:
