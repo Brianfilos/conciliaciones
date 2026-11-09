@@ -535,7 +535,7 @@
                 {% for v in codigos_concepto %}{% if v %}<li><button type="button" class="cf-val-btn{% if v == q_concepto %} active{% endif %}" onclick="cfVal('hf-q_concepto','{{ v }}')">{{ v }}</button></li>{% endif %}{% endfor %}
               </ul></div></div></div></th>
           <th class="text-end">valor_pagado</th>
-          <th>código_banco</th><th>número_cuenta</th>
+          <th>código_banco</th><th>número_cuenta</th><th>estado_pago</th>
 
           {# ══════════ OTROS MUNICIPIOS — DETALLE ══════════ #}
           {% else %}
@@ -731,8 +731,9 @@
           <td class="small">{{ caldas_desc_map|get_item:obj.pk }}</td>
           <td class="small fw-semibold">{{ obj.codigo_concepto }}</td>
           <td class="text-end small cop-money">{{ obj.valor_total|default:"" }}</td>
-          <td class="small">1</td>
-          <td class="small">2</td>
+          <td class="small">{{ obj.encabezado.datos_extra.codigo_banco|default:"1" }}</td>
+          <td class="small">{{ obj.encabezado.datos_extra.numero_cuenta|default:"224" }}</td>
+          <td class="small">{{ obj.encabezado.estado_pago|default:"" }}</td>
         </tr>
 
         {# ══════════ OTROS MUNICIPIOS — FILA DETALLE ══════════ #}
