@@ -245,7 +245,11 @@ class ProcesadorCaldas:
                 "razon_social":         razon if tipo_p == "J" else "",
                 "fecha_cobro":          fecha_pago,
                 "fecha_vencimiento":    None,
-                "estado_pago":          _sv(r.get("Estado Pago", "")).upper(),
+                # Tal cual lo entrega GOBS ("✓ Pago realizado" / "Pendiente de pago"),
+                # sin forzar mayúsculas: así se ve igual en el tablero y en el export
+                # que en GOBS. normalizar_pago() ya tolera cualquier combinación de
+                # mayúsculas/minúsculas, así que no afecta los KPIs de reportería.
+                "estado_pago":          _sv(r.get("Estado Pago", "")),
                 "estado_cxc":           "",
                 "datos_extra": {
                     "tipo_persona":  tipo_p,

@@ -375,7 +375,7 @@ def build_dec_rows(proceso, filtros=None):
             "",                             # Nro_tarj_prof_c_o_r
             "S",                            # Firma_declarante
             "",                             # Firma_c_o_r
-            "W",                            # Estado
+            enc.estado_pago,                # Estado (formato GOBS: "✓ Pago realizado" / "Pendiente de pago")
             fecha_reg,                      # Fecha_registro
             "",                             # Contribuyente
             ret_auto,                       # Retencion_autoretencion
