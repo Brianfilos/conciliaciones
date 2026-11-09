@@ -47,6 +47,9 @@ HEADERS = [
     "dir_tercero", "tel_tercero", "email_tercero",
     "clasificacion", "concepto_externo", "código_cpto_saimyr",
     "valor_pagado", "código_banco", "número_cuenta",
+    "estado_pago",  # columna 20, agregada al final para no romper el orden que ya
+                    # espera SAIMYR en las primeras 19 — formato GOBS tal cual
+                    # ("✓ Pago realizado" / "Pendiente de pago").
 ]
 
 # Encabezado de 32 columnas para declaraciones AUTO y RETE
@@ -467,5 +470,6 @@ def build_rows(proceso, filtros=None):
                 f"{float(det.valor_total):.2f}" if det.valor_total is not None else "0.00",  # valor_pagado
                 extra.get("codigo_banco", "1"),         # código_banco
                 extra.get("numero_cuenta", "224"),      # número_cuenta
+                enc.estado_pago,                        # estado_pago
             ])
     return HEADERS, rows
