@@ -40,6 +40,17 @@ class ProcesadorEnvigado:
     def _fmt_estado(v):
         return str(v or "").replace("✓ ", "").replace("✓", "").strip()
 
+    @staticmethod
+    def _fmt_ano(v):
+        # "v or 0" no filtra NaN (NaN es verdadero en Python), así que una fila sin año
+        # en GOBS rompía int(NaN) con ValueError y tumbaba todo el lote.
+        if v is None or (isinstance(v, float) and pd.isna(v)) or v == "":
+            return "0"
+        try:
+            return str(int(v))
+        except (ValueError, TypeError):
+            return "0"
+
     def __init__(self, proceso_codigo, archivos, municipio):
         self.proceso_codigo = proceso_codigo
         self.archivos = archivos
@@ -151,7 +162,7 @@ class ProcesadorEnvigado:
         def make_extra(row):
             return {
                 "periodo":      str(row.get("1. Periodo declarado", "")),
-                "ano":          str(int(row.get("1.1 Año", 0) or 0)),
+                "ano":          self._fmt_ano(row.get("1.1 Año", 0)),
                 "fecha_pres":   self._fmt_fecha(row.get(col_pres)),
                 "fecha_pago":   self._fmt_fecha(row.get("Fecha Pago")),
                 "san":          float(row.get("_san", 0) or 0),
@@ -258,7 +269,7 @@ class ProcesadorEnvigado:
         def make_extra(row):
             return {
                 "periodo":    str(row.get("1. Periodo declarado", "")),
-                "ano":        str(int(row.get("1.1 Año", 0) or 0)),
+                "ano":        self._fmt_ano(row.get("1.1 Año", 0)),
                 "fecha_pres": self._fmt_fecha(row.get(col_pres)),
                 "fecha_pago": self._fmt_fecha(row.get("Fecha Pago")),
                 "total":      (lambda v: float(v) if v is not None and str(v) not in ("", "nan", "NaN") else 0)(row.get(col_tot, 0)),

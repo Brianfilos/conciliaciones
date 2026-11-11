@@ -1555,6 +1555,21 @@ class ProcesadorEnvigadoColumnasGobsTests(TestCase):
         self.assertEqual(df_enc.iloc[0]["numero_documento"], "900654321")
         self.assertEqual(df_enc.iloc[0]["razon_social"], "Empresa Vieja Ltda")
 
+    def test_fila_sin_ano_no_tumba_el_lote(self):
+        """Bug real en producción: una declaración con "1.1 Año" en NaN tumbaba TODO el
+        lote con ValueError: cannot convert float NaN to integer. "v or 0" no sirve para
+        filtrar NaN porque NaN es verdadero en Python (no es falsy como 0 o '')."""
+        import numpy as np
+        import pandas as pd
+        from etl.services.envigado import ProcesadorEnvigado
+        dec = pd.DataFrame([self._fila_base(**{
+            "CedulaNIT del productor": "800205579", "Nombre del productor": "TRAVESA SAS",
+            "1.1 Año": np.nan,
+        })])
+        proc = ProcesadorEnvigado("CXC_RETE", {"declaraciones": dec}, self.mun)
+        df_enc, _ = proc._rete()
+        self.assertEqual(df_enc.iloc[0]["datos_extra"]["ano"], "0")
+
 
 class BaseRenameRazonSocialTests(TestCase):
     """_base_rename (compartido por Estrella y Copacabana) buscaba la columna 'Nombre
