@@ -7,11 +7,11 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap">
   {% load static %}
   <link rel="stylesheet" href="{% static 'css/main.css' %}">
   <style>
-    html, body { height: 100%; margin: 0; font-family: 'Outfit', sans-serif; }
+    html, body { height: 100%; margin: 0; font-family: 'Montserrat', sans-serif; }
 
     /* Split layout */
     .login-root {
@@ -22,7 +22,7 @@
 
     /* Left brand panel */
     .login-brand {
-      background: #1B3A6B;
+      background: #008EFF;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
@@ -34,7 +34,7 @@
       content: "";
       position: absolute; inset: 0;
       background:
-        radial-gradient(ellipse 70% 60% at 110% 10%, rgba(45,106,159,0.55) 0%, transparent 70%),
+        radial-gradient(ellipse 70% 60% at 110% 10%, rgba(11,67,247,0.45) 0%, transparent 70%),
         radial-gradient(ellipse 50% 50% at -10% 90%, rgba(255,255,255,0.04) 0%, transparent 70%);
       pointer-events: none;
     }
@@ -95,7 +95,7 @@
 
     .login-title {
       font-size: 1.65rem; font-weight: 800;
-      letter-spacing: -0.02em; color: #0f172a; line-height: 1.2;
+      letter-spacing: -0.02em; color: #000; line-height: 1.2;
     }
     .login-subtitle { font-size: 0.87rem; color: #64748b; margin-top: 0.3rem; margin-bottom: 2rem; }
 
@@ -104,12 +104,12 @@
     }
     .login-form-panel .form-control {
       border: 1px solid rgba(15,23,42,0.14); border-radius: 8px;
-      font-size: 0.9rem; font-family: 'Outfit', sans-serif;
-      padding: 0.6rem 0.85rem; color: #0f172a; background: #f8fafc;
+      font-size: 0.9rem; font-family: 'Montserrat', sans-serif;
+      padding: 0.6rem 0.85rem; color: #000; background: #f8fafc;
       transition: border-color 0.15s, box-shadow 0.15s;
     }
     .login-form-panel .form-control:focus {
-      border-color: #1B3A6B; box-shadow: 0 0 0 3px rgba(27,58,107,0.1);
+      border-color: #0B43F7; box-shadow: 0 0 0 3px rgba(11,67,247,0.14);
       background: #fff; outline: none;
     }
 
@@ -121,19 +121,19 @@
       color: #94a3b8; transition: color 0.15s;
       display: flex; align-items: center;
     }
-    .toggle-password:hover { color: #1B3A6B; }
+    .toggle-password:hover { color: #0B43F7; }
 
     .btn-login {
       width: 100%; padding: 0.7rem; font-size: 0.92rem; font-weight: 700;
-      font-family: 'Outfit', sans-serif; letter-spacing: 0.01em;
-      background: #1B3A6B; color: #fff; border: none; border-radius: 8px;
+      font-family: 'Montserrat', sans-serif; letter-spacing: 0.01em;
+      background: #0B43F7; color: #fff; border: none; border-radius: 8px;
       cursor: pointer; transition: background 0.15s, transform 0.1s;
     }
-    .btn-login:hover  { background: #2d6a9f; color: #fff; }
+    .btn-login:hover  { background: #508DFB; color: #fff; }
     .btn-login:active { transform: translateY(1px) scale(0.99); }
 
     .forgot-link { font-size: 0.77rem; font-weight: 500; color: #64748b; text-decoration: none; transition: color 0.15s; }
-    .forgot-link:hover { color: #1B3A6B; }
+    .forgot-link:hover { color: #0B43F7; }
 
     .dev-footer { position: absolute; bottom: 1.5rem; left: 0; right: 0; display: flex; justify-content: center; }
     .btn-filodev {

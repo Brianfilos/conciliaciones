@@ -1,6 +1,7 @@
 /* ─────────────────────────────────────────────────────────────────
    DESIGN SYSTEM — Sistema de Conciliaciones
-   Font: Outfit (loaded via Google Fonts in base.html)
+   Identidad GOBS: azules #0B43F7 / #008EFF / #508DFB, negro puro,
+   Montserrat (cargada en base.html)
    DESIGN_VARIANCE: 8 | MOTION_INTENSITY: 6 | VISUAL_DENSITY: 4
 ───────────────────────────────────────────────────────────────── */
 
@@ -10,16 +11,19 @@
   --color-secundario:    #2d6a9f;
   --color-texto-header:  #ffffff;
 
+  --gobs-brand:          #008EFF;
+
   /* Neutrals */
-  --surface:             #f8fafc;
+  --surface:             #f6f8fc;
   --surface-card:        #ffffff;
-  --border-subtle:       rgba(15, 23, 42, 0.07);
-  --border-default:      rgba(15, 23, 42, 0.12);
+  --surface-2:           #eef3fd;
+  --border-subtle:       #e9eef9;
+  --border-default:      #d8e1f3;
 
   /* Text */
-  --text-primary:        #0f172a;
-  --text-secondary:      #475569;
-  --text-muted:          #94a3b8;
+  --text-primary:        #000000;
+  --text-secondary:      #3b4458;
+  --text-muted:          #6f7891;
 
   /* Shadows */
   --shadow-xs:    0 1px 2px rgba(0,0,0,0.04);
@@ -31,9 +35,9 @@
   /* Radii */
   --r-xs:  4px;
   --r-sm:  8px;
-  --r-md:  12px;
-  --r-lg:  16px;
-  --r-xl:  24px;
+  --r-md:  10px;
+  --r-lg:  10px;
+  --r-xl:  14px;
 
   /* Motion */
   --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
@@ -47,7 +51,7 @@
 *, *::before, *::after { box-sizing: border-box; }
 
 body {
-  background: var(--surface);
+  background: var(--surface) !important;
   color: var(--text-primary);
   font-size: 0.9rem;
   line-height: 1.6;
@@ -61,29 +65,43 @@ body {
 ::-webkit-scrollbar-thumb:hover  { background: rgba(15,23,42,0.24); }
 
 /* === HEADER ====================================================== */
+/* banda azul GOBS */
 .app-header {
-  background: var(--color-primario);
+  background: var(--gobs-brand);
   color: var(--color-texto-header);
-  height: 60px;
-  border-bottom: 1px solid rgba(0,0,0,0.18);
-  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  height: 64px;
+  border-bottom: 0;
+  box-shadow: none;
   position: sticky;
   top: 0;
   z-index: 1000;
 }
 
+.header-chip {
+  background: #fff;
+  border-radius: 10px;
+  padding: 5px 10px;
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
 .header-logo {
-  max-height: 36px;
+  max-height: 30px;
   max-width: 110px;
   object-fit: contain;
+  display: block;
 }
+/* franja con los colores del municipio */
+.muni-franja { display: grid; grid-template-columns: 3fr 1fr; height: 5px; position: sticky; top: 64px; z-index: 999; }
+.muni-franja i { display: block; background: var(--muni-primario); }
+.muni-franja i + i { background: var(--muni-secundario); }
 
 .header-rol {
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
+  font-size: 0.95rem;
+  font-weight: 900;
+  letter-spacing: -0.01em;
   text-transform: uppercase;
-  color: rgba(255,255,255,0.48);
+  color: #fff;
   line-height: 1;
 }
 
@@ -105,14 +123,14 @@ body {
 .header-nav-tabs {
   display: flex;
   align-items: center;
-  background: rgba(0,0,0,0.22);
+  background: rgba(255,255,255,0.14);
   border-radius: 99px;
   padding: 3px;
   gap: 2px;
 }
 
 .header-nav-tab {
-  color: rgba(255,255,255,0.62);
+  color: rgba(255,255,255,0.88);
   text-decoration: none;
   font-size: 0.76rem;
   font-weight: 600;
@@ -128,9 +146,9 @@ body {
 }
 
 .header-nav-tab.active {
-  background: rgba(255,255,255,0.16);
-  color: #fff;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+  background: #fff;
+  color: var(--color-primario);
+  box-shadow: none;
 }
 
 /* ── User avatar ─────────────────────────────────────────────── */
@@ -184,13 +202,13 @@ body {
 
 /* === CARDS ======================================================= */
 .card {
-  border: 1.5px solid #d1dce8 !important;
+  border: 1px solid var(--border-default) !important;
   border-radius: var(--r-lg) !important;
-  box-shadow: 0 2px 8px rgba(27,58,107,0.06) !important;
+  box-shadow: none !important;
   background: var(--surface-card);
 }
 .card:hover {
-  box-shadow: 0 8px 24px rgba(27,58,107,0.10) !important;
+  box-shadow: 0 8px 24px rgba(11,67,247,0.07) !important;
 }
 
 .card-header {
@@ -202,7 +220,7 @@ body {
   background: var(--surface-card) !important;
 }
 .card-header h5,
-.card-header h6 { font-size: 0.9rem; font-weight: 700; margin: 0; }
+.card-header h6 { font-size: 0.8rem; font-weight: 700; margin: 0; text-transform: uppercase; letter-spacing: 0.05em; }
 
 /* Card headers with primary color (override) */
 .card-header[style*="background:var(--color-primario)"],
@@ -232,7 +250,7 @@ body {
 .proceso-card:hover {
   box-shadow: var(--shadow-hover) !important;
   transform: translateY(-4px);
-  border-color: rgba(27,58,107,0.14) !important;
+  border-color: var(--color-primario) !important;
 }
 
 .proceso-icon { color: var(--color-primario); }
@@ -260,11 +278,11 @@ body {
   color: var(--text-primary);
 }
 .dashboard-table tbody tr:last-child td { border-bottom: none; }
-.dashboard-table tbody tr:hover td { background: #f8faff; }
+.dashboard-table tbody tr:hover td { background: #e6ecfe; }
 
 /* General table overrides */
 .table {
-  --bs-table-hover-bg: #f8faff;
+  --bs-table-hover-bg: #e6ecfe;
   --bs-table-striped-bg: var(--surface);
 }
 
@@ -317,7 +335,7 @@ body {
 .form-control:focus,
 .form-select:focus {
   border-color: var(--color-secundario);
-  box-shadow: 0 0 0 3px rgba(45,106,159,0.12);
+  box-shadow: 0 0 0 3px rgba(11,67,247,0.14);
   background: var(--surface-card);
   outline: none;
 }
@@ -415,7 +433,7 @@ body {
 .badge.bg-danger   { background: #fee2e2 !important; color: #b91c1c !important; }
 .badge.bg-warning  { background: #fef9c3 !important; color: #a16207 !important; }
 .badge.bg-secondary{ background: #f1f5f9 !important; color: #475569 !important; }
-.badge.bg-primary  { background: #dbeafe !important; color: #1d4ed8 !important; }
+.badge.bg-primary  { background: #e6ecfe !important; color: #0B43F7 !important; }
 .badge.bg-info     { background: #e0f2fe !important; color: #0369a1 !important; }
 
 /* === PAGINATION ================================================== */
@@ -568,3 +586,9 @@ code {
 .app-footer a { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); text-decoration: none; font-weight: 600; margin-left: 4px; }
 .app-footer a:hover { color: var(--text-primary); }
 .app-footer img { width: 20px; height: 20px; border-radius: 50%; }
+
+/* === TITULOS GOBS ================================================ */
+h1, h2, .h1, .h2 { font-weight: 900; letter-spacing: -0.01em; }
+h3, h4, h5, h6, .h3, .h4, .h5, .h6 { font-weight: 700; }
+.section-label { color: var(--text-secondary); }
+.header-gobs { height: 26px; margin-right: 0; }

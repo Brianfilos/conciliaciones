@@ -9,16 +9,20 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Barlow+Condensed:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Outfit:wght@300;400;500;600;700;800&family=Barlow+Condensed:wght@400;500;600;700;800&display=swap">
   <link rel="stylesheet" href="{% static 'css/main.css' %}">
   <link rel="stylesheet" href="{% static 'css/mobile.css' %}">
   <style>
+    /* Identidad GOBS: la interfaz usa los azules GOBS y Montserrat; los colores
+       del municipio quedan como acento en la franja bajo el encabezado. */
     :root {
-      --color-primario:     {{ color_primario|default:"#1B3A6B" }};
-      --color-secundario:   {{ color_secundario|default:"#2d6a9f" }};
-      --color-texto-header: {{ color_texto_header|default:"#ffffff" }};
+      --muni-primario:      {{ color_primario|default:"#1B3A6B" }};
+      --muni-secundario:    {{ color_secundario|default:"#2d6a9f" }};
+      --color-primario:     #0B43F7;
+      --color-secundario:   #508DFB;
+      --color-texto-header: #ffffff;
     }
-    body { font-family: {{ fuente_principal|default:"'Outfit', sans-serif" }}; }
+    body { font-family: "Montserrat", system-ui, "Segoe UI", sans-serif; }
   </style>
   {% block extra_css %}{% endblock %}
 </head>
@@ -30,7 +34,7 @@
   <!-- Logo + rol + breadcrumb -->
   <div class="d-flex align-items-center gap-2 me-auto">
     {% if logo_url %}
-      <img src="{{ logo_url }}" alt="Logo" class="header-logo">
+      <span class="header-chip"><img src="{{ logo_url }}" alt="Logo" class="header-logo"></span>
     {% endif %}
     <div>
       <div class="header-rol">{{ request.user.get_rol_display|upper }}</div>
@@ -41,7 +45,7 @@
     </div>
   </div>
 
-  <img src="{% static 'img/marca/logo-gobs-blanco.png' %}" alt="GOBS" class="header-gobs">
+  <span class="header-chip"><img src="{% static 'img/marca/logo-gobs.png' %}" alt="GOBS" class="header-gobs"></span>
 
   <!-- Nav tabs (admin only) -->
   {% if request.user.is_admin %}
@@ -106,6 +110,7 @@
     </ul>
   </div>
 </header>
+<div class="muni-franja" aria-hidden="true"><i></i><i></i></div>
 
 <!-- ══ ALERTS ═════════════════════════════════════════════════════ -->
 {% if messages %}
