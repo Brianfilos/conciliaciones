@@ -156,6 +156,7 @@
 
 <!-- Hero -->
 <div class="muni-hero">
+  {% if logo_url %}<img src="{{ logo_url }}" alt="Logo {{ municipio.nombre }}" class="hero-muni-logo">{% endif %}
   <div class="hero-title">{{ municipio.nombre }}</div>
   <div class="hero-sub mt-1">
     Bienvenido, {{ request.user.get_full_name|default:request.user.username }} &nbsp;·&nbsp; {{ request.user.get_rol_display }}

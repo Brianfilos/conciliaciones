@@ -649,3 +649,7 @@ body .btn-ejecutar { background: var(--color-primario); color: #fff; }
 body .btn-ejecutar:hover { background: #0835c4; color: #fff; }
 body .proceso-card-header { background: var(--color-primario) !important; }
 body .registro-pill { background: var(--surface-2); color: var(--text-secondary); }
+
+/* logo del municipio en la tarjeta de bienvenida (como el de la alcaldia en Cierre Fiscal) */
+body .hero-muni-logo { display: block; height: 58px; max-width: 240px; object-fit: contain; margin-bottom: 0.9rem; }
+@media (max-width: 768px) { body .hero-muni-logo { height: 44px; } }

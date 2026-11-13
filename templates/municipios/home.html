@@ -279,6 +279,7 @@
   <!-- ── Hero ─────────────────────────────────────────────────── -->
   <div class="muni-hero">
     <div>
+      {% if logo_url %}<img src="{{ logo_url }}" alt="Logo {{ municipio.nombre }}" class="hero-muni-logo">{% endif %}
       <div class="hero-eyebrow">Conciliación Municipal</div>
       <h1 class="hero-title">{{ municipio.nombre }}</h1>
       <p class="hero-sub">
