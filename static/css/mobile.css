@@ -7,14 +7,14 @@
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 1040;
     margin: 0; border-radius: 0; gap: 4px; justify-content: space-around;
     padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
-    background: var(--gobs-brand);
-    border-top: 1px solid rgba(255,255,255,.16);
+    background: var(--surface-card);
+    border-top: 1px solid var(--border-default);
     box-shadow: 0 -6px 18px rgba(0,0,0,.2);
   }
   .header-nav-tab {
     flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
     padding: 6px 4px; border-radius: 10px; font-size: .68rem; text-align: center;
-    color: rgba(255,255,255,.72);
+    color: var(--text-secondary);
   }
   .header-nav-tab i { font-size: 1.2rem !important; margin: 0 !important; }
   body:has(.header-nav-tabs) { padding-bottom: calc(72px + env(safe-area-inset-bottom)); }

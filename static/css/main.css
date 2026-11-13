@@ -592,3 +592,60 @@ h1, h2, .h1, .h2 { font-weight: 900; letter-spacing: -0.01em; }
 h3, h4, h5, h6, .h3, .h4, .h5, .h6 { font-weight: 700; }
 .section-label { color: var(--text-secondary); }
 .header-gobs { height: 26px; margin-right: 0; }
+
+/* === BLANCO GOBS (como la app de Cierre Fiscal) ==================
+   Base blanca y negro puro; el azul GOBS solo como acento. Los colores
+   del municipio quedan en la franja bajo el encabezado. Los selectores
+   llevan "body" para ganarle a los <style> propios de cada plantilla. */
+body .app-header {
+  background: var(--surface-card);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-default);
+}
+body .header-rol { color: var(--text-primary); }
+body .header-breadcrumb { color: var(--text-secondary); }
+body .header-breadcrumb a { color: var(--text-muted); }
+body .header-breadcrumb a:hover { color: var(--color-primario); }
+body .header-chip { border: 1px solid var(--border-default); }
+body .header-nav-tabs { background: var(--surface-2); }
+body .header-nav-tab { color: var(--text-secondary); }
+body .header-nav-tab:hover { background: #fff; color: var(--text-primary); }
+body .header-nav-tab.active { background: var(--color-primario); color: #fff; }
+body .user-avatar { background: var(--surface-2); color: var(--color-primario); border-color: var(--border-default); }
+body .user-avatar:hover { background: #e6ecfe; border-color: var(--color-primario); }
+
+/* portadas (municipio, procesos): tarjeta blanca con titulo en mayuscula */
+body .muni-hero,
+body .municipio-header-card {
+  background: var(--surface-card) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-default) !important;
+  box-shadow: none !important;
+  border-radius: var(--r-lg) !important;
+}
+body .muni-hero::before, body .muni-hero::after,
+body .municipio-header-card::before, body .municipio-header-card::after { display: none !important; }
+body .muni-hero .hero-eyebrow { color: var(--color-primario); }
+body .muni-hero .hero-title,
+body .muni-hero .text-white,
+body .municipio-header-card .text-white,
+body .municipio-header-card h1 {
+  color: var(--text-primary) !important;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+}
+body .muni-hero .hero-sub, body .municipio-header-card p { color: var(--text-secondary) !important; opacity: 1; }
+body .muni-hero .hero-stat-val { color: var(--color-primario); font-weight: 800; }
+body .muni-hero .hero-stat-label { color: var(--text-muted); }
+body .municipio-header-card img { filter: none !important; }
+body .municipio-header-card .bi { color: var(--color-primario) !important; }
+
+/* tarjetas de procesos: icono y botones con el azul GOBS plano */
+body .card-icon-wrap { background: #e6ecfe; }
+body .card-icon-wrap i { color: var(--color-primario); }
+body .card-accent, body .card-top-accent { background: var(--color-primario); }
+body .btn-ejecutar { background: var(--color-primario); color: #fff; }
+body .btn-ejecutar:hover { background: #0835c4; color: #fff; }
+body .proceso-card-header { background: var(--color-primario) !important; }
+body .registro-pill { background: var(--surface-2); color: var(--text-secondary); }
