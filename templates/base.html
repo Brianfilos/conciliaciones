@@ -12,6 +12,8 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Outfit:wght@300;400;500;600;700;800&family=Barlow+Condensed:wght@400;500;600;700;800&display=swap">
   <link rel="stylesheet" href="{% static 'css/main.css' %}">
   <link rel="stylesheet" href="{% static 'css/mobile.css' %}">
+  <link rel="stylesheet" href="{% static 'css/gobs.css' %}">
+  <link rel="icon" type="image/png" href="{% static 'img/marca/favicon.png' %}">
   <style>
     /* Identidad GOBS: la interfaz usa los azules GOBS y Montserrat; los colores
        del municipio quedan como acento en la franja bajo el encabezado. */
@@ -23,94 +25,92 @@
       --color-texto-header: #ffffff;
     }
     body { font-family: "Montserrat", system-ui, "Segoe UI", sans-serif; }
+    /* el logo propio del municipio se ve en el encabezado; sus colores quedan como acento */
   </style>
   {% block extra_css %}{% endblock %}
 </head>
 <body class="bg-light">
 
-<!-- ══ HEADER ═════════════════════════════════════════════════════ -->
-<header class="app-header d-flex align-items-center px-3 gap-2">
-
-  <!-- Logo + rol + breadcrumb -->
-  <div class="d-flex align-items-center gap-2 me-auto">
-    {% if logo_url %}
-      <span class="header-chip"><img src="{{ logo_url }}" alt="Logo" class="header-logo"></span>
-    {% endif %}
-    <div>
-      <div class="header-rol">{{ request.user.get_rol_display|upper }}</div>
-      <div class="header-breadcrumb">
+<!-- ══ HEADER (membrete GOBS, como Cierre fiscal) ════════════════ -->
+<header class="brandbar app-header">
+  <div class="formas" aria-hidden="true"><i class="f1"></i><i class="f2"></i><i class="f3"></i></div>
+  <div class="wrap">
+    <a href="{% url 'municipio_home' %}" aria-label="Inicio"><img class="gobs" src="{% static 'img/marca/gobs_logo_sintag.png' %}" alt="Gobs · Estrategias Públicas"></a>
+    <span class="vsep" aria-hidden="true"></span>
+    <div class="ttl">
+      <b>Conciliaciones</b>
+      <span class="header-breadcrumb">
+        <span class="header-rol">{{ request.user.get_rol_display }}</span>
+        <span class="sep" aria-hidden="true">·</span>
         <a href="{% url 'municipio_home' %}">Inicio</a>
         {% block breadcrumb %}{% endblock %}
-      </div>
+      </span>
     </div>
+    {% if logo_url %}
+    <div class="cliente"><span>Cliente</span><img src="{{ logo_url }}" alt="Logo del municipio"></div>
+    {% endif %}
   </div>
+</header>
 
-  <span class="header-chip"><img src="{% static 'img/marca/logo-gobs.png' %}" alt="GOBS" class="header-gobs"></span>
-
-  <!-- Nav tabs (admin only) -->
+<nav class="mainnav" aria-label="Menú principal"><div class="wrap">
   {% if request.user.is_admin %}
-  <nav class="header-nav-tabs" aria-label="Secciones">
+  <div class="header-nav-tabs">
     {% with n=request.resolver_match.url_name %}
     <a href="{% url 'admin_municipio' %}"
        class="header-nav-tab {% if n == 'admin_municipio' or n == 'cargar_ciiu' or n == 'cargar_conceptos' %}active{% endif %}">
-      <i class="bi bi-sliders me-1" style="font-size:.7rem;"></i>Admin
+      <i class="bi bi-sliders" aria-hidden="true"></i>Admin
     </a>
     <a href="{% url 'reporteria' %}"
        class="header-nav-tab {% if n == 'reporteria' or n == 'historial' %}active{% endif %}">
-      <i class="bi bi-graph-up-arrow me-1" style="font-size:.7rem;"></i>Reportería
+      <i class="bi bi-graph-up-arrow" aria-hidden="true"></i>Reportería
     </a>
     <a href="{% url 'proceso_list' %}"
        class="header-nav-tab {% if n == 'proceso_list' or n == 'ejecutar_proceso' or n == 'dashboard' or n == 'ejecutar_progreso' or n == 'municipio_home' %}active{% endif %}">
-      <i class="bi bi-bar-chart-line me-1" style="font-size:.7rem;"></i>Analítica
+      <i class="bi bi-bar-chart-line" aria-hidden="true"></i>Analítica
     </a>
     {% if request.user.is_superuser %}
     <a href="{% url 'usuarios' %}"
        class="header-nav-tab {% if n == 'usuarios' or n == 'usuario_nuevo' or n == 'usuario_editar' %}active{% endif %}">
-      <i class="bi bi-people me-1" style="font-size:.7rem;"></i>Usuarios
+      <i class="bi bi-people" aria-hidden="true"></i>Usuarios
     </a>
     {% endif %}
     {% endwith %}
-  </nav>
+  </div>
+  {% else %}
+  <a href="{% url 'municipio_home' %}" class="mainnav-inicio">Inicio</a>
   {% endif %}
 
-  <!-- User dropdown -->
-  <div class="dropdown">
-    <div class="user-avatar"
-         role="button"
-         data-bs-toggle="dropdown"
-         aria-expanded="false"
-         title="{{ request.user.get_full_name|default:request.user.username }}">
-      {{ request.user.username|first|upper }}
+  <div class="usuario">
+    <div data-gobs-apps="conciliaciones"></div>
+    <div class="dropdown">
+      <button type="button" class="usuario-btn" data-bs-toggle="dropdown" aria-expanded="false"
+              title="{{ request.user.get_full_name|default:request.user.username }}">
+        <span class="avatar user-avatar" aria-hidden="true">{{ request.user.username|first|upper }}</span>
+        <span class="u-txt"><b>{{ request.user.get_full_name|default:request.user.username }}</b>
+          <small>{{ request.user.get_rol_display }}</small></span>
+        <i class="bi bi-chevron-down" aria-hidden="true"></i>
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        <li>
+          <a class="dropdown-item d-flex align-items-center gap-2" href="{% url 'cambiar_password' %}">
+            <i class="bi bi-key" style="font-size:.9rem;"></i>Cambiar contraseña
+          </a>
+        </li>
+        <li><hr class="dropdown-divider my-1"></li>
+        <li>
+          <form method="post" action="{% url 'logout' %}" class="m-0">
+            {% csrf_token %}
+            <button type="submit"
+                    class="dropdown-item text-danger d-flex align-items-center gap-2">
+              <i class="bi bi-box-arrow-right" style="font-size:.9rem;"></i>
+              Cerrar sesión
+            </button>
+          </form>
+        </li>
+      </ul>
     </div>
-    <ul class="dropdown-menu dropdown-menu-end">
-      <li class="px-3 pt-2 pb-1">
-        <div class="fw-bold" style="font-size:.85rem;color:var(--text-primary);">
-          {{ request.user.get_full_name|default:request.user.username }}
-        </div>
-        <div style="font-size:.73rem;color:var(--text-muted);margin-top:1px;">
-          {{ request.user.get_rol_display }}
-        </div>
-      </li>
-      <li><hr class="dropdown-divider my-1" style="border-color:var(--border-subtle);"></li>
-      <li>
-        <a class="dropdown-item d-flex align-items-center gap-2" href="{% url 'cambiar_password' %}">
-          <i class="bi bi-key" style="font-size:.9rem;"></i>Cambiar contraseña
-        </a>
-      </li>
-      <li>
-        <form method="post" action="{% url 'logout' %}" class="m-0">
-          {% csrf_token %}
-          <button type="submit"
-                  class="dropdown-item text-danger d-flex align-items-center gap-2">
-            <i class="bi bi-box-arrow-right" style="font-size:.9rem;"></i>
-            Cerrar sesión
-          </button>
-        </form>
-      </li>
-    </ul>
   </div>
-</header>
-<div class="muni-franja" aria-hidden="true"><i></i><i></i></div>
+</div></nav>
 
 <!-- ══ ALERTS ═════════════════════════════════════════════════════ -->
 {% if messages %}
@@ -129,12 +129,11 @@
   {% block content %}{% endblock %}
 </main>
 
-<footer class="app-footer">
-  Desarrollado por
-  <a href="https://filosdev.com" target="_blank" rel="noopener">
-    <img src="{% static 'img/marca/logo-filosdev.jpeg' %}" alt="filosdev"> filosdev.com
-  </a>
-</footer>
+<footer class="foot app-footer"><div class="wrap">
+  <img src="{% static 'img/marca/gobs_logo_sintag_blanco.png' %}" alt="Gobs · Estrategias Públicas">
+  <span>www.gobs.com.co · Desarrollado por
+    <a href="https://filosdev.com" target="_blank" rel="noopener"><img src="{% static 'img/marca/logo-filosdev.jpeg' %}" alt=""> filosdev.com</a></span>
+</div></footer>
 
 {% if user.is_authenticated and SESION_POR_PESTANA %}
 <script>
@@ -150,6 +149,7 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 {% load static %}
 <script src="{% static 'js/dashboard.js' %}"></script>
+<script src="{% static 'js/gobs-apps.js' %}" defer></script>
 {% block extra_js %}{% endblock %}
 </body>
 </html>
