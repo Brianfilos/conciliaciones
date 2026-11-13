@@ -7,7 +7,7 @@
   var APPS = [
     { id: 'cierre', nombre: 'Cierre fiscal', tag: 'La Estrella',
       desc: 'Presupuesto, tesorería, contabilidad y bancos cruzados por fuente.',
-      url: 'http://127.0.0.1:8000/', color: '#508DFB',
+      url: 'https://cierrefiscal.filosdev.com/', color: '#508DFB',
       ico: '<path d="M3 17h14M5 14V9M10 14V5M15 14v-3"/>' },
     { id: 'conciliaciones', nombre: 'Conciliaciones', tag: 'Municipios',
       desc: 'CxC, Declare y Pague, reportería y analítica por municipio.',
@@ -19,9 +19,14 @@
       ico: '<path d="M4 3h9l3 3v11H4zM7 10l2 2 4-4M7 15h6"/>' },
     { id: 'convertidor', nombre: 'Convertidor', tag: 'Herramientas',
       desc: 'Columnas de Excel a número entero, sin notación científica.',
-      url: 'https://herramientas.filosdev.com/convertidor/', color: '#88B0FF',
+      url: 'https://convertidor.filosdev.com/', color: '#88B0FF',
       ico: '<path d="M3 6h11M11 3l3 3-3 3M17 14H6M9 11l-3 3 3 3"/>' }
   ];
+
+  /* Portal con las cuatro apps (herramientas.filosdev.com); también lee esta lista */
+  var PORTAL = 'https://herramientas.filosdev.com/';
+  window.GOBS_APPS = APPS;
+  window.GOBS_PORTAL = PORTAL;
 
   var CSS = [
     '.ga{position:relative;display:inline-flex;font-family:"Montserrat",system-ui,"Segoe UI",sans-serif;line-height:1.3}',
@@ -73,6 +78,8 @@
     '.ga .ga-pop a.ga-card.ga-on .ga-u::before{content:"";display:inline-block;width:7px;height:7px;background:#508DFB;margin-right:6px}',
     '.ga-pie{display:flex;justify-content:space-between;gap:10px;padding:10px 18px;font-size:11px;color:#6B6C70;border-top:1px solid #E3E4E7;background:#fff}',
     '.ga-pie b{color:#000}',
+    '.ga .ga-pie a{color:#000;font-weight:700;text-decoration:none;border-bottom:2px solid #508DFB}',
+    '.ga .ga-pie a:hover{color:#508DFB}',
     '.ga-oscuro .ga .ga-btn{background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.3)}',
     '@media (max-width:640px){.ga .ga-pop{position:fixed;left:16px;right:16px;top:72px;width:auto;max-height:calc(100vh - 88px);overflow:auto}',
     ' .ga-cards{grid-template-columns:1fr}.ga-lbl{display:none}.ga .ga-btn{padding:0 10px}}',
@@ -107,7 +114,7 @@
       '<button type="button" class="ga-x" aria-label="Cerrar"><svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true">' +
       '<path d="M5 5l10 10M15 5L5 15" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></button></div>' +
       '<div class="ga-cards">' + tarjetas + '</div>' +
-      '<div class="ga-pie"><span><b>Gobs</b> · Estrategias Públicas</span><span>www.gobs.com.co</span></div></div>';
+      '<div class="ga-pie"><span><b>Gobs</b> · Estrategias Públicas</span><a href="' + PORTAL + '">Ver portal GOBS →</a></div></div>';
 
     var btn = host.querySelector('.ga-btn'), pop = host.querySelector('.ga-pop');
     function abrir(si) {
