@@ -118,8 +118,7 @@ FUENTES[("CALDAS", "DECLAREYPAGUE")] = Fuente(
     actividades="uvw_cq_actividades_gravadas_ica",
     cols_actividad=r"^(Codigo segun codificacion|Ingresos gravados|Tarifa|"
                    r"Impuestos de industria y comercio)",
-    col_union_actividades="Id Visita",
-    activar_con="GOBS_PG_CALDAS_DECLARE")
+    col_union_actividades="Id Visita")
 
 # Envigado: sin CXC de otro sistema y con "Fecha de presentacion" en lugar de fecha de visita.
 FUENTES[("ENVIGADO", "CXC_AUTO")] = Fuente(
