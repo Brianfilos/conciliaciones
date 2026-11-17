@@ -326,7 +326,7 @@
                 <li><button type="button" class="cf-val-btn{% if not caldas_ano_filtro %} active{% endif %}" onclick="cfVal('hf-caldas_ano','')">Todos</button></li>
                 {% for v in caldas_anos %}{% if v %}<li><button type="button" class="cf-val-btn{% if v == caldas_ano_filtro %} active{% endif %}" onclick="cfVal('hf-caldas_ano','{{ v }}')">{{ v }}</button></li>{% endif %}{% endfor %}
               </ul></div></div></div></th>
-          <th><div class="d-flex align-items-center gap-1">Fecha Presentación
+          <th><div class="d-flex align-items-center gap-1">Fecha de la Visita
             <div class="dropdown"><button class="cf-btn{% if env_fecha_pres_desde or env_fecha_pres_hasta %} cf-active{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">&#9660;</button>
               <div class="dropdown-menu cf-panel shadow p-2" style="min-width:230px;">
                 <div class="mb-1"><small class="text-muted">Desde</small>

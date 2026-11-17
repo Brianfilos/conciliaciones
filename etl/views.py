@@ -897,7 +897,7 @@ class ExportarView(View):
                     qs_enc = qs_enc.filter(**{f"datos_extra__{_campo}__in": _vals})
 
             enc_hdrs = ["Consecutivo", "NIT", "Nombre / Razón Social",
-                        "Periodo", "Año", "Fecha Presentación", "Fecha Pago",
+                        "Periodo", "Año", "Fecha de la Visita", "Fecha Pago",
                         "Total a Pagar", "Estado Pago"]
             from datetime import datetime as _dt6
 
