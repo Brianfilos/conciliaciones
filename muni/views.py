@@ -48,22 +48,6 @@ class AdminMunicipioView(View):
             mun_list.append({"mun": mun, "procesos": procesos})
         return render(request, "municipios/admin_municipio.html", {"mun_list": mun_list})
 
-    def post(self, request):
-        if not request.user.is_admin:
-            return redirect("municipio_home")
-        mun_id = request.POST.get("municipio_id")
-        municipio = get_object_or_404(Municipio, id=mun_id)
-        # Verificar que el admin tenga acceso a este municipio
-        if not request.user.is_superuser and request.user.municipio != municipio:
-            return redirect("municipio_home")
-        municipio.color_primario = request.POST.get("color_primario", municipio.color_primario)
-        municipio.color_secundario = request.POST.get("color_secundario", municipio.color_secundario)
-        municipio.color_texto_header = request.POST.get("color_texto_header", municipio.color_texto_header)
-        municipio.fuente_principal = request.POST.get("fuente_principal", municipio.fuente_principal)
-        municipio.save()
-        messages.success(request, f"Municipio {municipio.nombre} actualizado.")
-        return redirect("admin_municipio")
-
 
 @method_decorator(login_required, name="dispatch")
 class CargarCIIUView(View):
