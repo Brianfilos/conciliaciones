@@ -20,7 +20,11 @@
     { id: 'convertidor', nombre: 'Convertidor', tag: 'Herramientas',
       desc: 'Columnas de Excel a número entero, sin notación científica.',
       url: 'https://convertidor.filosdev.com/', color: '#88B0FF',
-      ico: '<path d="M3 6h11M11 3l3 3-3 3M17 14H6M9 11l-3 3 3 3"/>' }
+      ico: '<path d="M3 6h11M11 3l3 3-3 3M17 14H6M9 11l-3 3 3 3"/>' },
+    { id: 'fiscalizacion', nombre: 'Auditor con IA', tag: 'Fiscalización · Copacabana',
+      desc: 'Omisos, sancionables e inexactos en tiempo real, con un agente de IA.',
+      url: 'https://fiscalizacion.filosdev.com/', color: '#6CD3A5',
+      ico: '<circle cx="8.5" cy="8.5" r="5"/><path d="M12.5 12.5L17 17M6.5 8.5h4M8.5 6.5v4"/>' }
   ];
 
   /* Portal con las cuatro apps (herramientas.filosdev.com); también lee esta lista */
@@ -57,6 +61,7 @@
     '.ga .ga-x{position:absolute;right:12px;top:12px;width:30px;height:30px;border:0;border-radius:4px;background:rgba(255,255,255,.16);color:#fff;cursor:pointer;display:grid;place-items:center}',
     '.ga .ga-x:hover{background:rgba(255,255,255,.3);color:#fff}',
     '.ga-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:#E3E4E7}',
+    '.ga .ga-pop a.ga-card:last-child:nth-child(odd){grid-column:1/-1}',
     '.ga .ga-pop a.ga-card{position:relative;overflow:hidden;display:flex;flex-direction:column;gap:6px;padding:16px 18px 18px;background:#fff;color:#000;text-decoration:none!important;',
     ' min-width:0;margin:0;border:0;border-radius:0;font-size:13px;font-weight:500;box-shadow:none;transform:none;transition:background-color .25s;animation:gaUp .45s cubic-bezier(.2,.8,.2,1) both}',
     '.ga .ga-pop a.ga-card:nth-child(2){animation-delay:.05s}.ga .ga-pop a.ga-card:nth-child(3){animation-delay:.1s}.ga .ga-pop a.ga-card:nth-child(4){animation-delay:.15s}',
