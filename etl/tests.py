@@ -1622,6 +1622,65 @@ class ExtraColumnaMasPobladaTests(TestCase):
         self.assertEqual(fila.iloc[0]["valor_unitario"], 523738)
 
 
+class AjustarDetalleAlTotalTests(TestCase):
+    """ajustar_detalle_al_total() — el concepto de Autorretención/Retención ICA se
+    calculaba con el valor bruto de la actividad declarada, sin tener en cuenta que
+    GOBS puede traer un total_a_pagar distinto (p. ej. una declaración de Corrección,
+    que ya descuenta lo pagado en la declaración original). Caso real (Estrella,
+    consecutivo 9040047098): el concepto mostraba $286.323 cuando el total real a
+    cobrar era $9.346."""
+
+    def test_escala_el_concepto_cuando_total_y_suma_son_positivos(self):
+        import pandas as pd
+        from etl.services.base import ajustar_detalle_al_total
+        df_enc = pd.DataFrame([{"consecutivo_cxc": "9040047098", "total_a_pagar": 9346.0}])
+        df_det = pd.DataFrame([{"consecutivo_cxc": "9040047098", "codigo_concepto": "HDA674",
+                                "valor_unitario": 286323.0, "valor_total": 286323.0}])
+        ajustado = ajustar_detalle_al_total(df_enc, df_det)
+        self.assertEqual(ajustado.iloc[0]["valor_total"], 9346.0)
+        self.assertEqual(ajustado.iloc[0]["valor_unitario"], 9346.0)
+
+    def test_no_toca_nada_si_el_total_en_gobs_es_cero_o_negativo(self):
+        """Confirmado con un caso real: una declaración Inicial (no de Corrección) con
+        "24. TOTAL A PAGAR" = $0 en GOBS mismo, mientras la actividad declarada sí
+        traía valor. Forzar el concepto a 0 (o a un valor negativo si total_a_pagar
+        fuera negativo) sería peor que dejarlo visible tal cual para revisar aparte."""
+        import pandas as pd
+        from etl.services.base import ajustar_detalle_al_total
+        df_enc = pd.DataFrame([
+            {"consecutivo_cxc": "A", "total_a_pagar": 0.0},
+            {"consecutivo_cxc": "B", "total_a_pagar": -455830.0},
+        ])
+        df_det = pd.DataFrame([
+            {"consecutivo_cxc": "A", "codigo_concepto": "HDA674", "valor_unitario": 7673200.0, "valor_total": 7673200.0},
+            {"consecutivo_cxc": "B", "codigo_concepto": "HDA674", "valor_unitario": 544770.0, "valor_total": 544770.0},
+        ])
+        ajustado = ajustar_detalle_al_total(df_enc, df_det)
+        self.assertEqual(ajustado.iloc[0]["valor_total"], 7673200.0)
+        self.assertEqual(ajustado.iloc[1]["valor_total"], 544770.0)
+
+    def test_varios_conceptos_se_escalan_todos_y_el_redondeo_cuadra_exacto(self):
+        import pandas as pd
+        from etl.services.base import ajustar_detalle_al_total
+        df_enc = pd.DataFrame([{"consecutivo_cxc": "X", "total_a_pagar": 1000.0}])
+        df_det = pd.DataFrame([
+            {"consecutivo_cxc": "X", "codigo_concepto": "A", "valor_unitario": 100.0, "valor_total": 100.0},
+            {"consecutivo_cxc": "X", "codigo_concepto": "B", "valor_unitario": 200.0, "valor_total": 200.0},
+        ])
+        ajustado = ajustar_detalle_al_total(df_enc, df_det)
+        self.assertEqual(ajustado["valor_total"].sum(), 1000.0)
+
+    def test_no_rompe_si_ya_cuadra(self):
+        import pandas as pd
+        from etl.services.base import ajustar_detalle_al_total
+        df_enc = pd.DataFrame([{"consecutivo_cxc": "Y", "total_a_pagar": 500.0}])
+        df_det = pd.DataFrame([
+            {"consecutivo_cxc": "Y", "codigo_concepto": "A", "valor_unitario": 500.0, "valor_total": 500.0},
+        ])
+        ajustado = ajustar_detalle_al_total(df_enc, df_det)
+        self.assertEqual(ajustado.iloc[0]["valor_total"], 500.0)
+
+
 class ExportCompletoServiceTests(TestCase):
     def setUp(self):
         from datetime import date
