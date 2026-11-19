@@ -43,6 +43,25 @@
     return root.dataset.exportCompleto + (q ? '?' + q : '');
   }
 
+  const reducirMovimiento = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Cuenta ascendente del texto de un número (KPI): solo cosmética, el valor final es siempre nf.format(a).
+  function animarNumero(nodo, a) {
+    if (reducirMovimiento() || !(a > 0)) { nodo.textContent = nf.format(a); return; }
+    const t0 = performance.now(), dur = 650;
+    (function paso(t) {
+      const p = Math.min(1, (t - t0) / dur), ease = 1 - Math.pow(1 - p, 3);
+      nodo.textContent = nf.format(Math.round(a * ease));
+      if (p < 1) requestAnimationFrame(paso);
+    })(t0);
+  }
+  // Relleno diferido de una barra/medidor: se crea en 0 y, tras el primer pintado, toma su
+  // ancho real para que la transición CSS de "width" se vea (en un nodo recién creado no hay
+  // estado previo del que partir).
+  function rellenar(nodo, valorCss) {
+    if (reducirMovimiento()) { nodo.style.width = valorCss; return; }
+    requestAnimationFrame(() => requestAnimationFrame(() => { nodo.style.width = valorCss; }));
+  }
+
   function el(tag, attrs, ...kids) {
     const e = SVG_TAGS.has(tag) ? document.createElementNS(NS, tag) : document.createElement(tag);
     for (const [k, v] of Object.entries(attrs || {})) {
@@ -261,13 +280,17 @@
 
   /* ── KPIs ───────────────────────────────────────────────────── */
   function kpi(o) {
+    const valorNodo = el('div', { class: 'rp-kpi-v', text: o.valor });
+    const meterI = o.meter != null ? el('i', { style: `width:0%;background:${o.color || S1}` }) : null;
     const cuerpo = [
       el('div', { class: 'rp-kpi-l' }, o.color ? el('i', { class: 'rp-dot', style: 'background:' + o.color }) : null, o.etiqueta),
-      el('div', { class: 'rp-kpi-v', text: o.valor }),
+      valorNodo,
       o.sub ? el('div', { class: 'rp-kpi-s', text: o.sub, title: o.titulo || '' }) : null,
-      o.meter != null ? el('div', { class: 'rp-meter' }, el('i', { style: `width:${o.meter}%;background:${o.color || S1}` })) : null,
+      meterI ? el('div', { class: 'rp-meter' }, meterI) : null,
       o.nota ? el('div', { class: 'rp-kpi-nota' }, o.nota) : null,
     ];
+    if (o.n != null) animarNumero(valorNodo, o.n);
+    if (meterI) rellenar(meterI, o.meter + '%');
     if (o.clic) return el('button', { type: 'button', class: 'rp-kpi' + (o.hero ? ' rp-kpi-hero' : ''), 'aria-pressed': String(!!o.on), onclick: o.clic }, cuerpo);
     return el('div', { class: 'rp-kpi' + (o.hero ? ' rp-kpi-hero' : '') }, cuerpo);
   }
@@ -300,12 +323,12 @@
       ? [`${nf.format(totalUnicas)} son vigencias únicas; `, `${nf.format(totalDup)} duplicadas por reintentos`,
         el('a', { href: '#card-unicos', class: 'rp-kpi-nota-link' }, ' → ver')]
       : null;
-    cont.append(kpi({ hero: true, etiqueta: 'Declaraciones (todas, incluye reintentos)', valor: nf.format(k.total), sub: 'Valor total ' + money(k.valor), titulo: moneyFull(k.valor), nota: notaDeclaraciones }));
-    cont.append(kpi({ etiqueta: 'Pagadas', color: S1, valor: nf.format(k.pagadas), sub: pct(k.pagadas, k.total_unico) + ' · ' + money(k.pagadas_valor), titulo: moneyFull(k.pagadas_valor), meter: k.total_unico ? 100 * k.pagadas / k.total_unico : 0, on: st.pago === 'PAGADO', clic: () => alternar('pago', 'PAGADO'), nota: k.pagadas ? el('a', { href: urlExportCompleto('PAGADO'), class: 'rp-kpi-nota-link', onclick: e => e.stopPropagation() }, 'Descargar Excel completo →') : null }));
-    cont.append(kpi({ etiqueta: 'Pendientes de pago', color: S2, valor: nf.format(k.pendientes), sub: pct(k.pendientes, k.total_unico) + ' · ' + money(k.pendientes_valor) + ' por cobrar', titulo: moneyFull(k.pendientes_valor), meter: k.total_unico ? 100 * k.pendientes / k.total_unico : 0, on: st.pago === 'PENDIENTE', clic: () => alternar('pago', 'PENDIENTE'), nota: k.pendientes ? el('a', { href: urlExportCompleto('PENDIENTE'), class: 'rp-kpi-nota-link', onclick: e => e.stopPropagation() }, 'Descargar Excel completo →') : null }));
+    cont.append(kpi({ hero: true, etiqueta: 'Declaraciones (todas, incluye reintentos)', valor: nf.format(k.total), n: k.total, sub: 'Valor total ' + money(k.valor), titulo: moneyFull(k.valor), nota: notaDeclaraciones }));
+    cont.append(kpi({ etiqueta: 'Pagadas', color: S1, valor: nf.format(k.pagadas), n: k.pagadas, sub: pct(k.pagadas, k.total_unico) + ' · ' + money(k.pagadas_valor), titulo: moneyFull(k.pagadas_valor), meter: k.total_unico ? 100 * k.pagadas / k.total_unico : 0, on: st.pago === 'PAGADO', clic: () => alternar('pago', 'PAGADO'), nota: k.pagadas ? el('a', { href: urlExportCompleto('PAGADO'), class: 'rp-kpi-nota-link', onclick: e => e.stopPropagation() }, 'Descargar Excel completo →') : null }));
+    cont.append(kpi({ etiqueta: 'Pendientes de pago', color: S2, valor: nf.format(k.pendientes), n: k.pendientes, sub: pct(k.pendientes, k.total_unico) + ' · ' + money(k.pendientes_valor) + ' por cobrar', titulo: moneyFull(k.pendientes_valor), meter: k.total_unico ? 100 * k.pendientes / k.total_unico : 0, on: st.pago === 'PENDIENTE', clic: () => alternar('pago', 'PENDIENTE'), nota: k.pendientes ? el('a', { href: urlExportCompleto('PENDIENTE'), class: 'rp-kpi-nota-link', onclick: e => e.stopPropagation() }, 'Descargar Excel completo →') : null }));
     if (csv) {
-      cont.append(kpi({ etiqueta: 'En el sistema (CSV)', color: S1, valor: nf.format(k.en_sistema), sub: pct(k.en_sistema, k.total_unico) + ' de las declaraciones', meter: k.total_unico ? 100 * k.en_sistema / k.total_unico : 0 }));
-      cont.append(kpi({ etiqueta: 'Sin cargar en el sistema', color: S2, valor: nf.format(k.sin_cargar), sub: nf.format(k.sin_cargar_pagadas) + ' de ellas ya están pagadas', meter: k.total_unico ? 100 * k.sin_cargar / k.total_unico : 0, on: st.cxc === 'SIN_CARGAR', clic: () => alternar('cxc', 'SIN_CARGAR') }));
+      cont.append(kpi({ etiqueta: 'En el sistema (CSV)', color: S1, valor: nf.format(k.en_sistema), n: k.en_sistema, sub: pct(k.en_sistema, k.total_unico) + ' de las declaraciones', meter: k.total_unico ? 100 * k.en_sistema / k.total_unico : 0 }));
+      cont.append(kpi({ etiqueta: 'Sin cargar en el sistema', color: S2, valor: nf.format(k.sin_cargar), n: k.sin_cargar, sub: nf.format(k.sin_cargar_pagadas) + ' de ellas ya están pagadas', meter: k.total_unico ? 100 * k.sin_cargar / k.total_unico : 0, on: st.cxc === 'SIN_CARGAR', clic: () => alternar('cxc', 'SIN_CARGAR') }));
     }
   }
 
@@ -347,9 +370,10 @@
       const cx = m.l + banda * i + banda / 2, x = cx - bw / 2, gap = 2;
       const hA = ih * A[i] / ymax, hB = ih * B[i] / ymax;
       const g = el('g', { class: 'band' + (st.periodo && st.periodo !== c ? ' dim' : '') });
-      if (A[i] > 0) g.append(el('path', { class: 'mark', d: barraV(x, y(A[i]), bw, hA), fill: S1 }));
+      const retraso = 'animation-delay:' + Math.min(i * 12, 400) + 'ms';
+      if (A[i] > 0) g.append(el('path', { class: 'mark mark-v', style: retraso, d: barraV(x, y(A[i]), bw, hA), fill: S1 }));
       if (B[i] > 0) {  // el segmento de arriba termina donde termina el total; 2px de aire sobre el de abajo
-        g.append(el('path', { class: 'mark', d: barraV(x, y(A[i] + B[i]), bw, hB - (A[i] > 0 ? gap : 0)), fill: S2 }));
+        g.append(el('path', { class: 'mark mark-v', style: retraso, d: barraV(x, y(A[i] + B[i]), bw, hB - (A[i] > 0 ? gap : 0)), fill: S2 }));
       }
       const hit = el('rect', { class: 'hit', x: cx - banda / 2, y: m.t, width: banda, height: ih + 6 });
       marca(hit, {
@@ -384,7 +408,7 @@
       const y0 = i * rh + 8, len = Math.max(r.n ? 3 : 0, aw * r.n / max);
       const g = el('g', { class: 'band' + (st.cxc && st.cxc !== r.clave ? ' dim' : '') });
       g.append(el('text', { class: 't-2', x: 0, y: y0 + 15, text: cortar(nombreCxc(r.clave), 26) }));
-      g.append(el('path', { class: 'mark', d: barraH(lw, y0, len, 22, true), fill: r.clave === 'SIN_CARGAR' ? S2 : S1 }));
+      g.append(el('path', { class: 'mark mark-h', style: 'animation-delay:' + i * 50 + 'ms', d: barraH(lw, y0, len, 22, true), fill: r.clave === 'SIN_CARGAR' ? S2 : S1 }));
       g.append(el('text', { class: 't-ink', x: lw + len + 8, y: y0 + 15, text: `${nf.format(r.n)} · ${pct(r.n, total)}` }));
       const hit = el('rect', { class: 'hit', x: 0, y: y0 - 6, width: W, height: rh - 4 });
       marca(hit, {
@@ -425,7 +449,7 @@
         const activa = st.pago === pago && st.cxc === cxc, atenuar = (st.pago || st.cxc) && !activa;
         const accion = pago === 'PAGADO' && cxc === 'SIN_CARGAR' && val > 0;
         const g = el('g', { class: 'band' + (atenuar ? ' dim' : '') });
-        g.append(el('rect', { class: 'mark', x: x0 + gap / 2, y: y0, width: cw - gap, height: cellH, rx: 6, fill: nivel < 0 ? '#f1f5f9' : RAMPA[nivel] }));
+        g.append(el('rect', { class: 'mark mark-cell', style: 'animation-delay:' + (i * colsK.length + j) * 30 + 'ms', x: x0 + gap / 2, y: y0, width: cw - gap, height: cellH, rx: 6, fill: nivel < 0 ? '#f1f5f9' : RAMPA[nivel] }));
         if (accion) g.append(el('rect', { x: x0 + gap / 2 + 1, y: y0 + 1, width: cw - gap - 2, height: cellH - 2, rx: 5, fill: 'none', stroke: S2, 'stroke-width': 3 }));
         g.append(el('text', { x: x0 + cw / 2, y: y0 + cellH / 2 + 5, 'text-anchor': 'middle', style: `font-size:${T ? 14 : 15}px;font-weight:600;fill:${nivel >= 3 ? '#fff' : '#0f172a'}`, text: nf.format(val) }));
         const hit = el('rect', { class: 'hit', x: x0, y: y0, width: cw, height: cellH });
@@ -460,8 +484,9 @@
       const y0 = i * rh + 8, la = aw * p.pagado / max, lb = aw * p.pendiente / max, gap = p.pagado && p.pendiente ? 2 : 0;
       const g = el('g', { class: 'band' + (st.proceso && st.proceso !== p.id ? ' dim' : '') });
       g.append(el('text', { class: 't-2', x: 0, y: y0 + 15, text: cortar(p.nombre, 24) }));
-      if (p.pagado) g.append(el('path', { class: 'mark', d: barraH(lw, y0, la, 22, !p.pendiente), fill: S1 }));
-      if (p.pendiente) g.append(el('path', { class: 'mark', d: barraH(lw + la + gap, y0, lb, 22, true), fill: S2 }));
+      const retraso = 'animation-delay:' + i * 50 + 'ms';
+      if (p.pagado) g.append(el('path', { class: 'mark mark-h', style: retraso, d: barraH(lw, y0, la, 22, !p.pendiente), fill: S1 }));
+      if (p.pendiente) g.append(el('path', { class: 'mark mark-h', style: retraso, d: barraH(lw + la + gap, y0, lb, 22, true), fill: S2 }));
       g.append(el('text', { class: 't-ink', x: lw + la + lb + gap + 8, y: y0 + 15, text: nf.format(p.pagado + p.pendiente) }));
       const hit = el('rect', { class: 'hit', x: 0, y: y0 - 8, width: W, height: rh - 4 });
       marca(hit, {
@@ -497,15 +522,21 @@
     clear($('top-tools')).append(el('a', { class: 'rp-btn', href: urlExportCompleto('PENDIENTE') }, 'Descargar Excel completo'));
     if (!rows.length) return vacio(body, st.pago === 'PAGADO' ? 'Con el filtro "Pagadas" no hay saldos pendientes.' : 'No hay saldos pendientes con estos filtros.');
     const max = Math.max(...rows.map(r => r.valor), 1);
+    const barras = [];
     clear(body).append(el('div', { class: 'rp-table-scroll' }, el('table', { class: 'rp-table rp-table-top' },
       el('colgroup', {}, ['34px', 'auto', '108px', '64px', '150px'].map(w => el('col', { style: 'width:' + w }))),
       el('thead', {}, el('tr', {}, [['#', ''], ['Contribuyente', ''], ['Documento', ''], ['Decl.', 'Declaraciones'], ['Valor pendiente', '']].map(([t, ti], i) => el('th', { class: i > 2 ? 'num' : '', title: ti, text: t })))),
-      el('tbody', {}, rows.map((r, i) => el('tr', {},
-        el('td', { text: i + 1 }),
-        el('td', {}, el('div', { class: 'rp-name', title: r.nombre, text: r.nombre })),
-        el('td', { text: r.documento }),
-        el('td', { class: 'num', text: nf.format(r.n) }),
-        el('td', { class: 'num' }, moneyFull(r.valor), el('span', { class: 'rp-bar', style: `width:${Math.max(3, 100 * r.valor / max)}%` }))))))));
+      el('tbody', {}, rows.map((r, i) => {
+        const barra = el('span', { class: 'rp-bar', style: 'width:0' });
+        barras.push([barra, Math.max(3, 100 * r.valor / max) + '%']);
+        return el('tr', {},
+          el('td', { text: i + 1 }),
+          el('td', {}, el('div', { class: 'rp-name', title: r.nombre, text: r.nombre })),
+          el('td', { text: r.documento }),
+          el('td', { class: 'num', text: nf.format(r.n) }),
+          el('td', { class: 'num' }, moneyFull(r.valor), barra));
+      })))));
+    barras.forEach(([nodo, w]) => rellenar(nodo, w));
   }
 
   function render() {
