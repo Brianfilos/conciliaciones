@@ -365,7 +365,7 @@
       svg.append(el('line', { class: t ? 'grid' : 'axis', x1: m.l, x2: W - m.r, y1: y(t), y2: y(t) }));
       svg.append(el('text', { x: m.l - 8, y: y(t) + 4, 'text-anchor': 'end', text: v ? moneyEje(t) : nf.format(t) }));
     });
-    const cadaK = Math.ceil(66 / banda);
+    const ejeX = [];
     T.claves.forEach((c, i) => {
       const cx = m.l + banda * i + banda / 2, x = cx - bw / 2, gap = 2;
       const hA = ih * A[i] / ymax, hB = ih * B[i] / ymax;
@@ -385,9 +385,33 @@
       svg.append(g);
       const total = A[i] + B[i];
       if (total > 0) svg.append(el('text', { class: 't-total', x: cx, y: y(total) - 8, 'text-anchor': 'middle', text: fmt(total) }));
-      if (i % cadaK === 0) svg.append(el('text', { x: cx, y: H - m.b + 17, 'text-anchor': 'middle', text: T.etiquetas[i] }));
+      const etq = el('text', { x: cx, y: H - m.b + 17, 'text-anchor': 'middle', text: T.etiquetas[i] });
+      svg.append(etq);
+      ejeX.push(etq);
     });
     clear(body).append(svg);
+    podarEjeX(ejeX);
+  }
+  // Oculta etiquetas del eje X que se encimarían con la siguiente, usando su ancho real
+  // (no un ancho supuesto): períodos "Bim N - AAAA" y "AAAA (anual)" no miden lo mismo,
+  // así que un paso fijo entre etiquetas dejaba texto superpuesto e ilegible.
+  function podarEjeX(nodos) {
+    if (nodos.length < 2) return;
+    const cajas = nodos.map(n => n.getBBox());
+    const mantener = new Array(nodos.length).fill(false);
+    mantener[0] = true;
+    let derecha = cajas[0].x + cajas[0].width;
+    for (let i = 1; i < nodos.length - 1; i++) {
+      if (cajas[i].x >= derecha + 8) { mantener[i] = true; derecha = cajas[i].x + cajas[i].width; }
+    }
+    const iUlt = nodos.length - 1;
+    mantener[iUlt] = true;
+    for (let i = iUlt - 1; i >= 0; i--) {
+      if (!mantener[i]) continue;
+      if (cajas[i].x + cajas[i].width + 8 > cajas[iUlt].x) mantener[i] = false;
+      break;
+    }
+    nodos.forEach((n, i) => { if (!mantener[i]) n.remove(); });
   }
 
   /* ── Estado en el sistema (CSV) ─────────────────────────────── */
