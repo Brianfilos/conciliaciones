@@ -109,7 +109,12 @@ body a{text-decoration-color:var(--g-accent)}
 /* ═════════ superficies ═════════ */
 body .card{border:1px solid var(--g-line)!important;border-radius:6px!important;box-shadow:var(--g-sombra-1)!important;
   transition:transform .25s var(--g-ease),box-shadow .25s var(--g-ease)}
-body .card:hover{box-shadow:var(--g-sombra-2)!important}
+body .card:hover{box-shadow:var(--g-sombra-2)!important;transform:translateY(-2px)}
+body .proceso-card:hover{transform:translateY(-3px)}
+
+/* números de KPIs/tablas alineados en columna, sin que el ancho de cada dígito baile */
+body .rp-kpi-v,body .hero-stat-val,body .dashboard-table td.text-end,body .cop-money,body .table td.text-end{
+  font-variant-numeric:tabular-nums}
 body .card-header{background:var(--g-gris)!important;color:#000!important;border-bottom:1px solid var(--g-line)!important;border-radius:6px 6px 0 0!important}
 body .card-header *{color:inherit}
 body .card-header[style*="color-primario"],body .proceso-card-header{background:#000!important;color:#fff!important;position:relative;overflow:hidden}
@@ -144,6 +149,7 @@ body .table-hover tbody tr:hover td,body .dashboard-table tbody tr:hover td{back
 /* ═════════ botones y controles ═════════ */
 body .btn{border-radius:4px;font-weight:600;transition:background-color .2s var(--g-ease),color .2s var(--g-ease),transform .2s var(--g-ease),box-shadow .2s var(--g-ease)}
 body .btn:hover{transform:translateY(-1px)}
+body .btn:active{transform:scale(.98)}
 body .btn-primary,body .btn-ejecutar,body .btn-dark{background:#000!important;border-color:#000!important;color:#fff!important;position:relative;overflow:hidden}
 body .btn-primary:hover,body .btn-ejecutar:hover,body .btn-dark:hover{background:var(--g-accent)!important;border-color:var(--g-accent)!important;box-shadow:0 8px 16px -10px rgba(30,60,130,.6)}
 body .btn-primary::after,body .btn-ejecutar::after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.28) 50%,transparent 70%);
