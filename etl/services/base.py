@@ -6,6 +6,47 @@ import pandas as pd
 from muni.models import CIIUMunicipio
 
 
+def ajustar_detalle_al_total(df_enc, df_det):
+    """Escala los conceptos de cada consecutivo para que sumen exacto el total_a_pagar
+    del encabezado (que ya trae GOBS, autoritativo) — en vez de dejar el valor bruto de
+    la actividad declarada.
+
+    Caso real: una declaración de Corrección en Estrella (consecutivo 9040047098) traía
+    $286.323 en el concepto (el valor bruto de autorretención del bimestre), pero GOBS ya
+    había calculado "24. TOTAL A PAGAR" = $9.346 descontando lo pagado en la declaración
+    original — el concepto nunca reflejaba ese descuento.
+
+    Solo se escala cuando total_a_pagar Y la suma de conceptos son ambos positivos: si
+    alguno es cero o negativo (confirmado con un caso real: una declaración Inicial, no
+    de Corrección, con "24. TOTAL A PAGAR" = $0 en GOBS mismo mientras la actividad
+    declarada sí traía valor), escalar no tiene sentido — se deja el concepto tal cual
+    para que quede visible y pueda revisarse aparte, en vez de forzarlo a 0 o a un valor
+    negativo sin sentido."""
+    if df_det.empty or "consecutivo_cxc" not in df_det.columns:
+        return df_det
+    df_det = df_det.copy()
+    totales = df_enc.set_index("consecutivo_cxc")["total_a_pagar"]
+    for consec, sub in df_det.groupby("consecutivo_cxc"):
+        total = totales.get(consec)
+        if total is None or pd.isna(total) or total <= 0:
+            continue
+        total = float(total)
+        idx = sub.index
+        valores = pd.to_numeric(df_det.loc[idx, "valor_total"], errors="coerce").fillna(0)
+        suma = float(valores.sum())
+        if suma <= 0 or round(suma - total, 2) == 0:
+            continue
+        factor = total / suma
+        nuevos = (valores * factor).round(0)
+        diff = round(nuevos.sum() - total)
+        if diff:
+            mayor = nuevos.idxmax()
+            nuevos.loc[mayor] -= diff
+        df_det.loc[idx, "valor_unitario"] = nuevos
+        df_det.loc[idx, "valor_total"] = nuevos
+    return df_det
+
+
 class ProcesadorBase:
     PREFIJO = "903"
     CSV_SEP = ","
@@ -373,6 +414,7 @@ class ProcesadorBase:
             self._extra(dec, "EXCESO",  self.CONCEPTO_EXC),
         ] if e is not None]
         df_det = pd.concat([ag] + extras, ignore_index=True)
+        df_det = ajustar_detalle_al_total(df_enc, df_det)
         return df_enc, df_det
 
     # ── RETE ─────────────────────────────────────────────────────────────────
@@ -412,6 +454,7 @@ class ProcesadorBase:
             _rete_extra("TARJETA",    self.CONCEPTO_TAR, prefijo=self.PREFIJO_RENGLON_TARJETA),
         ] if e is not None]
         df_det = pd.concat(extras, ignore_index=True) if extras else self._empty_det()
+        df_det = ajustar_detalle_al_total(df_enc, df_det)
         return df_enc, df_det
 
     # ── DECLARE Y PAGUE ───────────────────────────────────────────────────────

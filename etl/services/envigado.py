@@ -1,6 +1,7 @@
 import re
 import pandas as pd
 from muni.models import CIIUMunicipio
+from etl.services.base import ajustar_detalle_al_total
 
 
 class ProcesadorEnvigado:
@@ -232,6 +233,7 @@ class ProcesadorEnvigado:
             ([pd.DataFrame(rows_extra)] if rows_extra else []),
             ignore_index=True
         )
+        df_det = ajustar_detalle_al_total(df_enc, df_det)
         return df_enc, df_det
 
     # ── RETENCIÓN ICA ─────────────────────────────────────────────────────────
@@ -336,4 +338,5 @@ class ProcesadorEnvigado:
         df_det = pd.DataFrame(rows) if rows else pd.DataFrame(
             columns=["consecutivo_cxc","codigo_concepto","descripcion_concepto","centro_costo","cantidad","valor_unitario","valor_total"]
         )
+        df_det = ajustar_detalle_al_total(df_enc, df_det)
         return df_enc, df_det

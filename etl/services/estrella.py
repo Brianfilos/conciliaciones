@@ -1,6 +1,6 @@
 import re
 import pandas as pd
-from etl.services.base import ProcesadorBase
+from etl.services.base import ProcesadorBase, ajustar_detalle_al_total
 
 _DATE_RE = re.compile(r'^\d{1,2}/\d{1,2}/\d{4}$')
 
@@ -313,6 +313,7 @@ class ProcesadorEstrella(ProcesadorBase):
             self._extra(dec, "TARJETA",    self.CONCEPTO_TAR, prefijo=self.PREFIJO_RENGLON_TARJETA),
         ] if e is not None]
         df_det = pd.concat(extras, ignore_index=True) if extras else self._empty_det()
+        df_det = ajustar_detalle_al_total(df_enc, df_det)
         return df_enc, df_det
 
     # ── RÉGIMEN SIMPLE (RST) ─────────────────────────────────────────────────

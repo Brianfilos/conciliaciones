@@ -11,6 +11,7 @@ Diferencias clave vs Copa/Estrella:
 """
 import pandas as pd
 from muni.models import CIIUMunicipio
+from etl.services.base import ajustar_detalle_al_total
 
 
 # ── Mapeo tipo sanción → código OCC ──────────────────────────────────────────
@@ -365,6 +366,7 @@ class ProcesadorCaldas:
             tc = _col(dec, "24. TOTAL")
             df_enc.at[idx, "total_a_pagar"] = pd.to_numeric(r.get(tc, None), errors="coerce") if tc else None
 
+        df_det = ajustar_detalle_al_total(df_enc, df_det)
         return df_enc, df_det
 
     # ── RETE ─────────────────────────────────────────────────────────────────
@@ -433,6 +435,7 @@ class ProcesadorCaldas:
             df_enc.at[idx, "descripcion"] = f"PAGO RETENCIÓN {per} AÑO {ano} Radicado No. {consec}"
             df_enc.at[idx, "total_a_pagar"] = pd.to_numeric(r.get(tot_col, None), errors="coerce") if tot_col else None
 
+        df_det = ajustar_detalle_al_total(df_enc, df_det)
         return df_enc, df_det
 
     # ── DECLARE Y PAGUE ───────────────────────────────────────────────────────
