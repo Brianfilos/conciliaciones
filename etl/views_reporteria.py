@@ -27,12 +27,19 @@ def _filtros(request):
     proceso = g.get("proceso", "")
     pago = g.get("pago", "").upper()
     periodo = g.get("periodo", "")
+    periodo_desde = g.get("periodo_desde", "")
+    periodo_hasta = g.get("periodo_hasta", "")
+    clave_re = r"\d{4}(-(\d{2}|B\d))?"
     return {
         "proceso": int(proceso) if proceso.isdigit() else None,
         "ano": g.get("ano") if re.fullmatch(r"\d{4}", g.get("ano", "")) else None,
         "pago": pago if pago in ("PAGADO", "PENDIENTE") else None,
         "cxc": g.get("cxc", "").strip().upper()[:40] or None,
-        "periodo": periodo if re.fullmatch(r"\d{4}(-(\d{2}|B\d))?", periodo) else None,
+        "periodo": periodo if re.fullmatch(clave_re, periodo) else None,
+        # Rango libre de períodos (arrastrar sobre el gráfico de tiempo): solo se usa si no
+        # hay un "periodo" exacto elegido (ver aplicar() en reporteria.py).
+        "periodo_desde": periodo_desde if re.fullmatch(clave_re, periodo_desde) else None,
+        "periodo_hasta": periodo_hasta if re.fullmatch(clave_re, periodo_hasta) else None,
         "doc": g.get("doc", "").strip()[:30] or None,
         "q": g.get("q", "").strip()[:60] or None,
     }

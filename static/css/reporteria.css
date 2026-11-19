@@ -108,6 +108,7 @@ button.rp-kpi { cursor: pointer; }
 .rp svg .t-ink { fill: var(--ink); }
 .rp svg .t-2 { fill: var(--ink-2); }
 .rp svg .t-total { fill: var(--ink); font-size: 12px; font-weight: 700; }
+.rp svg .t-delta { fill: var(--ink-3); font-size: 10px; font-weight: 600; }
 .rp svg .grid { stroke: var(--grid); stroke-width: 1; }
 .rp svg .axis { stroke: var(--axis); stroke-width: 1; }
 .rp svg .mark { transition: opacity .15s, filter .15s; transform-box: fill-box; }
@@ -156,6 +157,15 @@ button.rp-kpi { cursor: pointer; }
   .rp-kpi-hero .rp-kpi-v { font-size: 2.6rem; }
 }
 @media (prefers-reduced-motion: reduce) { .rp * { transition: none !important; animation: none !important; } }
+
+/* Resaltado cruzado: al pasar el mouse por cualquier KPI/barra/celda de Pagadas o
+   Pendientes, se atenúa en todo el tablero lo que no sea de esa misma categoría.
+   !important: estos elementos tienen su propia animación de entrada con fill-mode "both"
+   (rpRise/rpGrowV/rpGrowH/rpFadeCell), cuyo valor final queda "sujeto" por encima de una
+   regla normal en la cascada — sin !important esta atenuación nunca se ve. */
+.rp [data-pago] { transition: opacity .15s; }
+.rp[data-hover-pago="PAGADO"] [data-pago="PENDIENTE"],
+.rp[data-hover-pago="PENDIENTE"] [data-pago="PAGADO"] { opacity: .3 !important; }
 @media (forced-colors: active) { .rp svg .mark { stroke: CanvasText; } }
 
 /* Buscador de contribuyente */

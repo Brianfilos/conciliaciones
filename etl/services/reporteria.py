@@ -7,7 +7,9 @@ clic en una barra las demás alternativas siguen visibles (la elegida queda resa
 el resto de gráficos sí se recalcula.
 
 Filtros (todos opcionales): proceso (id), ano, pago (PAGADO | PENDIENTE),
-cxc (estado en el sistema de información, o SIN_CARGAR), periodo (clave del eje de tiempo).
+cxc (estado en el sistema de información, o SIN_CARGAR), periodo (clave del eje de tiempo),
+periodo_desde/periodo_hasta (rango de períodos, arrastrando sobre el gráfico de tiempo;
+se ignoran si "periodo" ya trae un valor exacto).
 """
 import re
 import unicodedata
@@ -129,8 +131,21 @@ def calcular(municipio, filtros):
         if rid in ids_unicos:
             filas.append(r)
 
-    f = {k: filtros.get(k) for k in ("proceso", "ano", "pago", "cxc", "periodo", "doc", "q")}
+    f = {k: filtros.get(k) for k in
+         ("proceso", "ano", "pago", "cxc", "periodo", "periodo_desde", "periodo_hasta", "doc", "q")}
     palabras = _sin_tildes(f["q"]).split() if f["q"] else []
+
+    def periodo_ok(r):
+        # Las claves ("2023-04", "2023-B2", "2023") se comparan como texto: ya se ordenan
+        # así para dibujar el eje de tiempo (claves = sorted(por), más abajo), así que el
+        # mismo orden sirve para el rango.
+        if f["periodo"]:
+            return r["periodo"] == f["periodo"]
+        if f["periodo_desde"] and (not r["periodo"] or r["periodo"] < f["periodo_desde"]):
+            return False
+        if f["periodo_hasta"] and (not r["periodo"] or r["periodo"] > f["periodo_hasta"]):
+            return False
+        return True
 
     def aplicar(excluir=(), datos=None):
         def ok(r):
@@ -138,7 +153,7 @@ def calcular(municipio, filtros):
                     and (("ano" in excluir) or not f["ano"] or r["ano"] == f["ano"])
                     and (("pago" in excluir) or not f["pago"] or r["pago"] == f["pago"])
                     and (("cxc" in excluir) or not f["cxc"] or r["cxc"] == f["cxc"])
-                    and (("periodo" in excluir) or not f["periodo"] or r["periodo"] == f["periodo"])
+                    and (("periodo" in excluir) or periodo_ok(r))
                     and (not f["doc"] or r["doc"] == f["doc"])
                     and all(w in r["buscable"] for w in palabras))
         return [r for r in (datos if datos is not None else filas) if ok(r)]

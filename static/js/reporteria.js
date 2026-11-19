@@ -7,13 +7,28 @@
 
   const S1 = '#2a78d6', S2 = '#eb6834';
   const RAMPA = ['#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95', '#104281'];
-  const FILTROS = ['proceso', 'ano', 'pago', 'cxc', 'periodo', 'doc', 'q'];
+  const FILTROS = ['proceso', 'ano', 'pago', 'cxc', 'periodo', 'periodo_desde', 'periodo_hasta', 'doc', 'q'];
   const SVG_TAGS = new Set(['svg', 'g', 'rect', 'path', 'line', 'text', 'title']);
   const NS = 'http://www.w3.org/2000/svg';
 
   let datos = JSON.parse(document.getElementById('rp-datos').textContent);
-  const st = { municipio: root.dataset.municipio, metrica: 'n', tablas: {} };
+  const st = { municipio: root.dataset.municipio, metrica: 'n', tablas: {}, comparar: false };
   FILTROS.forEach(k => { st[k] = datos.filtros[k] || null; });
+
+  // Resaltado cruzado: pasar el mouse sobre cualquier elemento "Pagadas"/"Pendientes"
+  // (KPI, barra, celda del cruce) atenúa el resto del tablero que no sea de esa categoría.
+  const marcarHoverPago = p => { root.dataset.hoverPago = p; };
+  const quitarHoverPago = () => { delete root.dataset.hoverPago; };
+  root.addEventListener('pointerover', e => {
+    const t = e.target.closest && e.target.closest('[data-pago]');
+    if (t) marcarHoverPago(t.dataset.pago);
+  });
+  root.addEventListener('pointerout', e => {
+    const desde = e.target.closest && e.target.closest('[data-pago]');
+    if (!desde) return;
+    const hacia = e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('[data-pago]');
+    if (!hacia) quitarHoverPago();
+  });
 
   const $ = id => document.getElementById(id);
   const nf = new Intl.NumberFormat('es-CO');
@@ -102,6 +117,7 @@
   }
   function alternar(k, v) { st[k] = st[k] === v ? null : v; refresh(); }
   function fijar(k, v) { st[k] = v || null; refresh(); }
+  function fijarRango(desde, hasta) { st.periodo_desde = desde || null; st.periodo_hasta = hasta || null; refresh(); }
 
   /* ── Tooltip: una sola, valores primero ─────────────────────── */
   const tip = $('rp-tip');
@@ -268,7 +284,12 @@
     if (st.doc) chips.push(['Contribuyente', (datos.contribuyente && datos.contribuyente.nombre) || st.doc, 'doc']);
     else if (st.q) chips.push(['Búsqueda', st.q, 'q']);
     if (st.periodo) chips.push(['Período', (datos.tiempo.etiquetas[datos.tiempo.claves.indexOf(st.periodo)] || st.periodo), 'periodo']);
-    chips.forEach(([t, v, k]) => cont.append(el('button', { type: 'button', class: 'rp-chip', 'aria-label': 'Quitar filtro ' + t, onclick: () => fijar(k, null) }, t + ':', el('b', { text: v }), ' ✕')));
+    else if (st.periodo_desde || st.periodo_hasta) {
+      const etq = c => { const i = datos.tiempo.claves.indexOf(c); return i >= 0 ? datos.tiempo.etiquetas[i] : c; };
+      const txt = (st.periodo_desde ? etq(st.periodo_desde) : '…') + ' – ' + (st.periodo_hasta ? etq(st.periodo_hasta) : '…');
+      chips.push(['Rango', txt, 'rango']);
+    }
+    chips.forEach(([t, v, k]) => cont.append(el('button', { type: 'button', class: 'rp-chip', 'aria-label': 'Quitar filtro ' + t, onclick: () => (k === 'rango' ? fijarRango(null, null) : fijar(k, null)) }, t + ':', el('b', { text: v }), ' ✕')));
     if (chips.length || st.proceso || st.ano) {
       cont.append(el('button', { type: 'button', class: 'rp-clear', onclick: () => { FILTROS.forEach(k => { st[k] = null; }); refresh(); }, text: 'Limpiar todo' }));
     }
@@ -291,8 +312,8 @@
     ];
     if (o.n != null) animarNumero(valorNodo, o.n);
     if (meterI) rellenar(meterI, o.meter + '%');
-    if (o.clic) return el('button', { type: 'button', class: 'rp-kpi' + (o.hero ? ' rp-kpi-hero' : ''), 'aria-pressed': String(!!o.on), onclick: o.clic }, cuerpo);
-    return el('div', { class: 'rp-kpi' + (o.hero ? ' rp-kpi-hero' : '') }, cuerpo);
+    if (o.clic) return el('button', { type: 'button', class: 'rp-kpi' + (o.hero ? ' rp-kpi-hero' : ''), 'data-pago': o.pago || null, 'aria-pressed': String(!!o.on), onclick: o.clic }, cuerpo);
+    return el('div', { class: 'rp-kpi' + (o.hero ? ' rp-kpi-hero' : ''), 'data-pago': o.pago || null }, cuerpo);
   }
   /* ── Resumen en una frase ───────────────────────────────────── */
   function renderHeadline() {
@@ -324,8 +345,8 @@
         el('a', { href: '#card-unicos', class: 'rp-kpi-nota-link' }, ' → ver')]
       : null;
     cont.append(kpi({ hero: true, etiqueta: 'Declaraciones (todas, incluye reintentos)', valor: nf.format(k.total), n: k.total, sub: 'Valor total ' + money(k.valor), titulo: moneyFull(k.valor), nota: notaDeclaraciones }));
-    cont.append(kpi({ etiqueta: 'Pagadas', color: S1, valor: nf.format(k.pagadas), n: k.pagadas, sub: pct(k.pagadas, k.total_unico) + ' · ' + money(k.pagadas_valor), titulo: moneyFull(k.pagadas_valor), meter: k.total_unico ? 100 * k.pagadas / k.total_unico : 0, on: st.pago === 'PAGADO', clic: () => alternar('pago', 'PAGADO'), nota: k.pagadas ? el('a', { href: urlExportCompleto('PAGADO'), class: 'rp-kpi-nota-link', onclick: e => e.stopPropagation() }, 'Descargar Excel completo →') : null }));
-    cont.append(kpi({ etiqueta: 'Pendientes de pago', color: S2, valor: nf.format(k.pendientes), n: k.pendientes, sub: pct(k.pendientes, k.total_unico) + ' · ' + money(k.pendientes_valor) + ' por cobrar', titulo: moneyFull(k.pendientes_valor), meter: k.total_unico ? 100 * k.pendientes / k.total_unico : 0, on: st.pago === 'PENDIENTE', clic: () => alternar('pago', 'PENDIENTE'), nota: k.pendientes ? el('a', { href: urlExportCompleto('PENDIENTE'), class: 'rp-kpi-nota-link', onclick: e => e.stopPropagation() }, 'Descargar Excel completo →') : null }));
+    cont.append(kpi({ etiqueta: 'Pagadas', color: S1, pago: 'PAGADO', valor: nf.format(k.pagadas), n: k.pagadas, sub: pct(k.pagadas, k.total_unico) + ' · ' + money(k.pagadas_valor), titulo: moneyFull(k.pagadas_valor), meter: k.total_unico ? 100 * k.pagadas / k.total_unico : 0, on: st.pago === 'PAGADO', clic: () => alternar('pago', 'PAGADO'), nota: k.pagadas ? el('a', { href: urlExportCompleto('PAGADO'), class: 'rp-kpi-nota-link', onclick: e => e.stopPropagation() }, 'Descargar Excel completo →') : null }));
+    cont.append(kpi({ etiqueta: 'Pendientes de pago', color: S2, pago: 'PENDIENTE', valor: nf.format(k.pendientes), n: k.pendientes, sub: pct(k.pendientes, k.total_unico) + ' · ' + money(k.pendientes_valor) + ' por cobrar', titulo: moneyFull(k.pendientes_valor), meter: k.total_unico ? 100 * k.pendientes / k.total_unico : 0, on: st.pago === 'PENDIENTE', clic: () => alternar('pago', 'PENDIENTE'), nota: k.pendientes ? el('a', { href: urlExportCompleto('PENDIENTE'), class: 'rp-kpi-nota-link', onclick: e => e.stopPropagation() }, 'Descargar Excel completo →') : null }));
     if (csv) {
       cont.append(kpi({ etiqueta: 'En el sistema (CSV)', color: S1, valor: nf.format(k.en_sistema), n: k.en_sistema, sub: pct(k.en_sistema, k.total_unico) + ' de las declaraciones', meter: k.total_unico ? 100 * k.en_sistema / k.total_unico : 0 }));
       cont.append(kpi({ etiqueta: 'Sin cargar en el sistema', color: S2, valor: nf.format(k.sin_cargar), n: k.sin_cargar, sub: nf.format(k.sin_cargar_pagadas) + ' de ellas ya están pagadas', meter: k.total_unico ? 100 * k.sin_cargar / k.total_unico : 0, on: st.cxc === 'SIN_CARGAR', clic: () => alternar('cxc', 'SIN_CARGAR') }));
@@ -339,20 +360,29 @@
     herramientas($('tiempo-tools'), [
       { t: 'Cantidad', on: !v, fn: () => { st.metrica = 'n'; renderTiempo(); } },
       { t: 'Valor $', on: v, fn: () => { st.metrica = 'valor'; renderTiempo(); } },
+      { t: 'Comparar con anterior', on: !!st.comparar, fn: () => { st.comparar = !st.comparar; renderTiempo(); } },
       { t: st.tablas.tiempo ? 'Ver gráfico' : 'Ver tabla', on: !!st.tablas.tiempo, fn: () => { st.tablas.tiempo = !st.tablas.tiempo; renderTiempo(); } },
     ]);
     clear($('tiempo-legend')).append(
       el('span', {}, el('i', { class: 'rp-dot', style: 'background:' + S1 }), 'Pagadas'),
       el('span', {}, el('i', { class: 'rp-dot', style: 'background:' + S2 }), 'Pendientes'));
-    $('tiempo-hint').textContent = 'Haz clic en una barra para filtrar por ese período.' + (v ? ' Ejes en millones de pesos (M).' : '');
+    $('tiempo-hint').textContent = 'Haz clic en una barra para filtrar por ese período (Mayús+clic en otra para un rango).' + (v ? ' Ejes en millones de pesos (M).' : '');
     $('tiempo-note').textContent = T.sin_fecha ? nf.format(T.sin_fecha) + ' registros no traen fecha ni período y no aparecen en este gráfico.' : '';
     const body = $('tiempo-body');
     if (!T.claves.length) return vacio(body, 'No hay declaraciones con período para mostrar.');
     const A = v ? T.valor_pagado : T.pagado, B = v ? T.valor_pendiente : T.pendiente;
     const fmt = x => (v ? moneyFull(x) : nf.format(x));
+    const variacion = (i) => {
+      if (i === 0) return '—';
+      const total = A[i] + B[i], anterior = A[i - 1] + B[i - 1];
+      if (!anterior) return total ? 'nuevo' : '—';
+      const d = Math.round(100 * (total - anterior) / anterior);
+      return (d > 0 ? '+' : '') + d + ' %';
+    };
     if (st.tablas.tiempo) {
-      return clear(body).append(tabla(['Período', 'Pagadas', 'Pendientes', 'Total'],
-        T.claves.map((c, i) => [T.etiquetas[i], fmt(A[i]), fmt(B[i]), fmt(A[i] + B[i])])));
+      const cols = ['Período', 'Pagadas', 'Pendientes', 'Total'].concat(st.comparar ? ['vs. anterior'] : []);
+      return clear(body).append(tabla(cols,
+        T.claves.map((c, i) => [T.etiquetas[i], fmt(A[i]), fmt(B[i]), fmt(A[i] + B[i])].concat(st.comparar ? [variacion(i)] : []))));
     }
     const W = ancho(body), H = 268, m = { l: v ? 74 : 52, r: 8, t: 10, b: 30 };
     const iw = W - m.l - m.r, ih = H - m.t - m.b, n = T.claves.length, banda = iw / n;
@@ -369,22 +399,37 @@
     T.claves.forEach((c, i) => {
       const cx = m.l + banda * i + banda / 2, x = cx - bw / 2, gap = 2;
       const hA = ih * A[i] / ymax, hB = ih * B[i] / ymax;
-      const g = el('g', { class: 'band' + (st.periodo && st.periodo !== c ? ' dim' : '') });
+      let fuera = false;
+      if (st.periodo) fuera = st.periodo !== c;
+      else if (st.periodo_desde || st.periodo_hasta) fuera = (st.periodo_desde && c < st.periodo_desde) || (st.periodo_hasta && c > st.periodo_hasta);
+      const g = el('g', { class: 'band' + (fuera ? ' dim' : '') });
       const retraso = 'animation-delay:' + Math.min(i * 12, 400) + 'ms';
-      if (A[i] > 0) g.append(el('path', { class: 'mark mark-v', style: retraso, d: barraV(x, y(A[i]), bw, hA), fill: S1 }));
+      if (A[i] > 0) g.append(el('path', { class: 'mark mark-v', style: retraso, 'data-pago': 'PAGADO', d: barraV(x, y(A[i]), bw, hA), fill: S1 }));
       if (B[i] > 0) {  // el segmento de arriba termina donde termina el total; 2px de aire sobre el de abajo
-        g.append(el('path', { class: 'mark mark-v', style: retraso, d: barraV(x, y(A[i] + B[i]), bw, hB - (A[i] > 0 ? gap : 0)), fill: S2 }));
+        g.append(el('path', { class: 'mark mark-v', style: retraso, 'data-pago': 'PENDIENTE', d: barraV(x, y(A[i] + B[i]), bw, hB - (A[i] > 0 ? gap : 0)), fill: S2 }));
       }
       const hit = el('rect', { class: 'hit', x: cx - banda / 2, y: m.t, width: banda, height: ih + 6 });
       marca(hit, {
         titulo: T.etiquetas[i], etiqueta: `${T.etiquetas[i]}: ${fmt(A[i])} pagadas, ${fmt(B[i])} pendientes`,
         filas: [{ color: S1, label: 'Pagadas', valor: fmt(A[i]) }, { color: S2, label: 'Pendientes', valor: fmt(B[i]) }, { label: 'Total', valor: fmt(A[i] + B[i]) }],
-        alClic: () => alternar('periodo', c),
+        alClic: evt => {
+          if (evt && evt.shiftKey && st.periodo) {
+            const ini = st.periodo < c ? st.periodo : c, fin = st.periodo < c ? c : st.periodo;
+            st.periodo = null; st.periodo_desde = ini; st.periodo_hasta = fin;
+            refresh();
+          } else {
+            alternar('periodo', c);
+          }
+        },
       });
       g.append(hit);
       svg.append(g);
       const total = A[i] + B[i];
       if (total > 0) svg.append(el('text', { class: 't-total', x: cx, y: y(total) - 8, 'text-anchor': 'middle', text: fmt(total) }));
+      if (st.comparar && i > 0) {
+        const v = variacion(i);
+        if (v !== '—') svg.append(el('text', { class: 't-delta', x: cx, y: y(total) - (total > 0 ? 22 : 8), 'text-anchor': 'middle', text: v }));
+      }
       const etq = el('text', { x: cx, y: H - m.b + 17, 'text-anchor': 'middle', text: T.etiquetas[i] });
       svg.append(etq);
       ejeX.push(etq);
@@ -473,7 +518,7 @@
         const activa = st.pago === pago && st.cxc === cxc, atenuar = (st.pago || st.cxc) && !activa;
         const accion = pago === 'PAGADO' && cxc === 'SIN_CARGAR' && val > 0;
         const g = el('g', { class: 'band' + (atenuar ? ' dim' : '') });
-        g.append(el('rect', { class: 'mark mark-cell', style: 'animation-delay:' + (i * colsK.length + j) * 30 + 'ms', x: x0 + gap / 2, y: y0, width: cw - gap, height: cellH, rx: 6, fill: nivel < 0 ? '#f1f5f9' : RAMPA[nivel] }));
+        g.append(el('rect', { class: 'mark mark-cell', style: 'animation-delay:' + (i * colsK.length + j) * 30 + 'ms', 'data-pago': pago, x: x0 + gap / 2, y: y0, width: cw - gap, height: cellH, rx: 6, fill: nivel < 0 ? '#f1f5f9' : RAMPA[nivel] }));
         if (accion) g.append(el('rect', { x: x0 + gap / 2 + 1, y: y0 + 1, width: cw - gap - 2, height: cellH - 2, rx: 5, fill: 'none', stroke: S2, 'stroke-width': 3 }));
         g.append(el('text', { x: x0 + cw / 2, y: y0 + cellH / 2 + 5, 'text-anchor': 'middle', style: `font-size:${T ? 14 : 15}px;font-weight:600;fill:${nivel >= 3 ? '#fff' : '#0f172a'}`, text: nf.format(val) }));
         const hit = el('rect', { class: 'hit', x: x0, y: y0, width: cw, height: cellH });
@@ -509,8 +554,8 @@
       const g = el('g', { class: 'band' + (st.proceso && st.proceso !== p.id ? ' dim' : '') });
       g.append(el('text', { class: 't-2', x: 0, y: y0 + 15, text: cortar(p.nombre, 24) }));
       const retraso = 'animation-delay:' + i * 50 + 'ms';
-      if (p.pagado) g.append(el('path', { class: 'mark mark-h', style: retraso, d: barraH(lw, y0, la, 22, !p.pendiente), fill: S1 }));
-      if (p.pendiente) g.append(el('path', { class: 'mark mark-h', style: retraso, d: barraH(lw + la + gap, y0, lb, 22, true), fill: S2 }));
+      if (p.pagado) g.append(el('path', { class: 'mark mark-h', style: retraso, 'data-pago': 'PAGADO', d: barraH(lw, y0, la, 22, !p.pendiente), fill: S1 }));
+      if (p.pendiente) g.append(el('path', { class: 'mark mark-h', style: retraso, 'data-pago': 'PENDIENTE', d: barraH(lw + la + gap, y0, lb, 22, true), fill: S2 }));
       g.append(el('text', { class: 't-ink', x: lw + la + lb + gap + 8, y: y0 + 15, text: nf.format(p.pagado + p.pendiente) }));
       const hit = el('rect', { class: 'hit', x: 0, y: y0 - 8, width: W, height: rh - 4 });
       marca(hit, {

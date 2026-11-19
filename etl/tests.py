@@ -1248,6 +1248,57 @@ class ReporteriaDeduplicaTests(TestCase):
         self.assertEqual(k["en_sistema"], k["total_unico"])
 
 
+class ReporteriaRangoPeriodoTests(TestCase):
+    """calcular(): filtro de rango libre de períodos (periodo_desde/periodo_hasta), usado por
+    el Mayús+clic del gráfico de tiempo en Reportería para elegir un rango en vez de un solo
+    período."""
+
+    def setUp(self):
+        from datetime import date
+        self.mun = Municipio.objects.create(codigo="REPRANGO", nombre="Municipio Reportería Rango")
+        self.p = Proceso.objects.create(municipio=self.mun, codigo="CXC_AUTO", nombre="Autorretención")
+        u = User.objects.create_user("reprango", "reprango@example.com", "Rango#2026", municipio=self.mun)
+        ej = Ejecucion.objects.create(proceso=self.p, usuario=u)
+        EncabezadoCXC.objects.create(proceso=self.p, ejecucion=ej, consecutivo_cxc="1", consecutivo_original="1",
+            numero_documento="900001", fecha_cobro=date(2025, 1, 15), estado_pago="PENDIENTE DE PAGO", total_a_pagar=100)
+        EncabezadoCXC.objects.create(proceso=self.p, ejecucion=ej, consecutivo_cxc="2", consecutivo_original="2",
+            numero_documento="900002", fecha_cobro=date(2025, 6, 15), estado_pago="PENDIENTE DE PAGO", total_a_pagar=200)
+        EncabezadoCXC.objects.create(proceso=self.p, ejecucion=ej, consecutivo_cxc="3", consecutivo_original="3",
+            numero_documento="900003", fecha_cobro=date(2025, 12, 15), estado_pago="PENDIENTE DE PAGO", total_a_pagar=300)
+
+    def test_rango_incluye_solo_los_periodos_dentro_del_limite(self):
+        from etl.services import reporteria
+        d = reporteria.calcular(self.mun, {"periodo_desde": "2025-03", "periodo_hasta": "2025-09"})
+        self.assertEqual(d["kpi"]["total_unico"], 1)
+        self.assertEqual(d["kpi"]["valor"], 200)
+
+    def test_solo_desde_es_un_limite_abierto_hacia_el_futuro(self):
+        from etl.services import reporteria
+        d = reporteria.calcular(self.mun, {"periodo_desde": "2025-06"})
+        self.assertEqual(d["kpi"]["total_unico"], 2)  # junio y diciembre
+
+    def test_solo_hasta_es_un_limite_abierto_hacia_el_pasado(self):
+        from etl.services import reporteria
+        d = reporteria.calcular(self.mun, {"periodo_hasta": "2025-06"})
+        self.assertEqual(d["kpi"]["total_unico"], 2)  # enero y junio
+
+    def test_periodo_exacto_tiene_prioridad_sobre_el_rango(self):
+        """Si por algún motivo llegan ambos (no debería pasar desde el tablero, que limpia uno
+        al fijar el otro), el período exacto manda — es el filtro más específico."""
+        from etl.services import reporteria
+        d = reporteria.calcular(self.mun, {"periodo": "2025-01", "periodo_desde": "2025-06", "periodo_hasta": "2025-12"})
+        self.assertEqual(d["kpi"]["total_unico"], 1)
+        self.assertEqual(d["kpi"]["valor"], 100)
+
+    def test_el_grafico_de_tiempo_no_se_restringe_a_su_propio_rango(self):
+        """Igual que con el filtro de un solo período: el gráfico de tiempo debe seguir
+        mostrando TODOS los períodos (con el rango marcado/atenuado en el frontend), no solo
+        los que caen dentro del rango — si no, no se vería qué hay fuera para comparar."""
+        from etl.services import reporteria
+        d = reporteria.calcular(self.mun, {"periodo_desde": "2025-03", "periodo_hasta": "2025-09"})
+        self.assertEqual(len(d["tiempo"]["claves"]), 3)
+
+
 class ProcesadorEstrellaRegimenSimpleTests(TestCase):
     """Régimen Simple (RST), La Estrella: a diferencia de Auto/Rete/Declare, la fuente es
     el "Informe Detallado Pagos (giros) ICAC" de DIAN, que no trae consecutivo propio ni
