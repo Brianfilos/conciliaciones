@@ -230,10 +230,11 @@ class SeguridadLoginTests(TestCase):
         self.assertEqual(r.status_code, 302)
         self.assertNotIn("malo.example.com", r["Location"])
 
-    def test_next_interno_se_respeta(self):
+    def test_next_siempre_se_ignora_va_a_inicio(self):
+        # El login siempre lleva a Inicio, nunca a la página donde expiró la sesión.
         r = self.client.post(reverse("login") + "?next=/etl/algo/",
                              {"username": "luis", "password": "ClaveSegura#2026"})
-        self.assertEqual(r["Location"], "/etl/algo/")
+        self.assertEqual(r["Location"], reverse("municipio_home"))
 
     def test_sesion_expira_al_cerrar_el_navegador(self):
         self._login("ClaveSegura#2026")

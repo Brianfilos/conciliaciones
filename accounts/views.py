@@ -6,7 +6,6 @@ from django.core.exceptions import PermissionDenied
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
-from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 
 from muni.models import Municipio
@@ -46,11 +45,7 @@ class LoginView(View):
             if usuario.municipio_id:
                 from etl.services import auto_refresh
                 auto_refresh.disparar_para_municipio(usuario.municipio.codigo)
-            next_url = request.GET.get('next', '')
-            if not url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()},
-                                                   require_https=request.is_secure()):
-                next_url = 'municipio_home'
-            return redirect(next_url)
+            return redirect('municipio_home')
         seguridad.registrar_fallo(request, nombre)
         return render(request, 'login.html', {'form': form})
 
